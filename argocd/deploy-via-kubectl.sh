@@ -34,7 +34,7 @@ echo "   http://a7bdc31c3dc1d40b6a7864152748bc10-1109434892.eu-west-1.elb.amazon
 echo ""
 echo "👤 Login credentials:"
 echo "   Username: admin"
-echo "   Password: 3Whk8H7AqZ0kuXyf"
+echo "   Password: (get from ArgoCD secret)"
 echo ""
 echo "📋 What you'll see in ArgoCD UI:"
 echo "   1. microservices-demo - Your microservices application"

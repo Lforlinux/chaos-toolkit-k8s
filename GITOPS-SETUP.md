@@ -17,7 +17,7 @@ Your Kubernetes GitOps repository is now fully configured and deployed!
 ### **✅ LoadBalancer Access**
 - **ArgoCD UI:** `http://a7bdc31c3dc1d40b6a7864152748bc10-1109434892.eu-west-1.elb.amazonaws.com/applications`
 - **Username:** `admin`
-- **Password:** `3Whk8H7AqZ0kuXyf`
+- **Password:** (get from ArgoCD secret)
 
 ## 🔄 **GitOps Workflow (How It Works):**
 
