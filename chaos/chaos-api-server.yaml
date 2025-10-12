@@ -25,6 +25,7 @@ spec:
         args:
           - -c
           - |
+            mkdir -p /app
             pip install fastapi uvicorn kubernetes pyyaml
             cat > /app/main.py << 'EOF'
             from fastapi import FastAPI, HTTPException
