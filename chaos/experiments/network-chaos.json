@@ -1,0 +1,77 @@
+{
+  "version": "1.0.0",
+  "title": "Network Chaos - Service Communication Disruption",
+  "description": "Introduces network latency and packet loss to test service communication resilience",
+  "tags": ["kubernetes", "network", "latency"],
+  "steady-state-hypothesis": {
+    "title": "Services can communicate",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "frontend-reachable",
+        "tolerance": true,
+        "provider": {
+          "type": "python",
+          "module": "chaosk8s.service.probes",
+          "func": "service_is_available",
+          "arguments": {
+            "name": "frontend",
+            "ns": "default"
+          }
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "introduce-network-latency",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.network.actions",
+        "func": "add_network_latency",
+        "arguments": {
+          "label-selector": "app=frontend",
+          "ns": "default",
+          "latency": "100ms",
+          "jitter": "10ms"
+        }
+      },
+      "pauses": {
+        "after": 45
+      }
+    },
+    {
+      "type": "action",
+      "name": "introduce-packet-loss",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.network.actions",
+        "func": "add_network_packet_loss",
+        "arguments": {
+          "label-selector": "app=frontend",
+          "ns": "default",
+          "loss": "5%"
+        }
+      },
+      "pauses": {
+        "after": 30
+      }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "remove-network-chaos",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.network.actions",
+        "func": "remove_network_chaos",
+        "arguments": {
+          "label-selector": "app=frontend",
+          "ns": "default"
+        }
+      }
+    }
+  ]
+}

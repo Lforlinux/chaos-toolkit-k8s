@@ -1,0 +1,105 @@
+{
+  "version": "1.0.0",
+  "title": "Modify Deployment - Resource Constraints",
+  "description": "Modifies deployment resources (CPU/Memory limits) to test application behavior under resource constraints",
+  "tags": ["kubernetes", "deployment", "resources"],
+  "steady-state-hypothesis": {
+    "title": "Deployment is healthy",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "deployment-ready",
+        "tolerance": true,
+        "provider": {
+          "type": "python",
+          "module": "chaosk8s.deployment.probes",
+          "func": "deployment_is_ready",
+          "arguments": {
+            "name": "frontend",
+            "ns": "default"
+          }
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "reduce-cpu-limits",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.deployment.actions",
+        "func": "set_resources",
+        "arguments": {
+          "name": "frontend",
+          "ns": "default",
+          "requests": {
+            "cpu": "50m",
+            "memory": "64Mi"
+          },
+          "limits": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          }
+        }
+      },
+      "pauses": {
+        "after": 60
+      }
+    },
+    {
+      "type": "action",
+      "name": "scale-down-deployment",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.deployment.actions",
+        "func": "scale_deployment",
+        "arguments": {
+          "name": "frontend",
+          "ns": "default",
+          "replicas": 1
+        }
+      },
+      "pauses": {
+        "after": 30
+      }
+    }
+  ],
+  "rollbacks": [
+    {
+      "type": "action",
+      "name": "restore-cpu-limits",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.deployment.actions",
+        "func": "set_resources",
+        "arguments": {
+          "name": "frontend",
+          "ns": "default",
+          "requests": {
+            "cpu": "100m",
+            "memory": "128Mi"
+          },
+          "limits": {
+            "cpu": "200m",
+            "memory": "256Mi"
+          }
+        }
+      }
+    },
+    {
+      "type": "action",
+      "name": "scale-up-deployment",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.deployment.actions",
+        "func": "scale_deployment",
+        "arguments": {
+          "name": "frontend",
+          "ns": "default",
+          "replicas": 3
+        }
+      }
+    }
+  ]
+}

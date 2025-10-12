@@ -1,0 +1,278 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chaos-api-server
+  namespace: default
+  labels:
+    app: chaos-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chaos-api
+  template:
+    metadata:
+      labels:
+        app: chaos-api
+    spec:
+      serviceAccountName: chaos-api
+      containers:
+      - name: chaos-api
+        image: python:3.9-slim
+        ports:
+        - containerPort: 8000
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            pip install fastapi uvicorn kubernetes pyyaml
+            cat > /app/main.py << 'EOF'
+            from fastapi import FastAPI, HTTPException
+            from kubernetes import client, config
+            import yaml
+            import json
+            import os
+
+            app = FastAPI(title="Chaos Engineering API")
+
+            # Load Kubernetes config
+            try:
+                config.load_incluster_config()
+            except:
+                config.load_kube_config()
+
+            v1 = client.CoreV1Api()
+            batch_v1 = client.BatchV1Api()
+
+            @app.get("/")
+            async def root():
+                return {"message": "Chaos Engineering API Server"}
+
+            @app.post("/api/run-chaos")
+            async def run_chaos_experiment(request: dict):
+                try:
+                    experiment_file = request.get("experiment")
+                    experiment_name = request.get("name")
+                    
+                    if not experiment_file:
+                        raise HTTPException(status_code=400, detail="Experiment file not specified")
+                    
+                    # Create a new chaos experiment job
+                    job_manifest = {
+                        "apiVersion": "batch/v1",
+                        "kind": "Job",
+                        "metadata": {
+                            "name": f"chaos-experiment-{experiment_name.lower().replace(' ', '-')}",
+                            "namespace": "default",
+                            "labels": {
+                                "app": "chaos-experiment",
+                                "experiment": experiment_file
+                            }
+                        },
+                        "spec": {
+                            "template": {
+                                "metadata": {
+                                    "labels": {
+                                        "app": "chaos-experiment"
+                                    }
+                                },
+                                "spec": {
+                                    "serviceAccountName": "chaos-runner",
+                                    "containers": [
+                                        {
+                                            "name": "chaos-runner",
+                                            "image": "chaostoolkit/chaostoolkit:latest",
+                                            "command": ["/bin/sh"],
+                                            "args": [
+                                                "-c",
+                                                f"""
+                                                echo "🚀 Starting Chaos Experiment: {experiment_name}"
+                                                echo "📁 Experiment file: /experiments/{experiment_file}"
+                                                
+                                                # Install required chaos extensions
+                                                pip install chaostoolkit-kubernetes chaostoolkit-prometheus
+                                                
+                                                # Run the chaos experiment
+                                                chaos run /experiments/{experiment_file} --verbose
+                                                
+                                                echo "✅ Chaos experiment completed!"
+                                                """
+                                            ],
+                                            "env": [
+                                                {
+                                                    "name": "CHAOS_EXPERIMENT",
+                                                    "value": experiment_file
+                                                },
+                                                {
+                                                    "name": "KUBECONFIG",
+                                                    "value": "/var/run/secrets/kubernetes.io/serviceaccount"
+                                                }
+                                            ],
+                                            "volumeMounts": [
+                                                {
+                                                    "name": "experiments",
+                                                    "mountPath": "/experiments"
+                                                },
+                                                {
+                                                    "name": "kubeconfig",
+                                                    "mountPath": "/var/run/secrets/kubernetes.io/serviceaccount",
+                                                    "readOnly": True
+                                                }
+                                            ]
+                                        }
+                                    ],
+                                    "volumes": [
+                                        {
+                                            "name": "experiments",
+                                            "configMap": {
+                                                "name": "chaos-experiments"
+                                            }
+                                        },
+                                        {
+                                            "name": "kubeconfig",
+                                            "secret": {
+                                                "secretName": "chaos-runner-token"
+                                            }
+                                        }
+                                    ],
+                                    "restartPolicy": "Never"
+                                }
+                            },
+                            "backoffLimit": 3
+                        }
+                    }
+                    
+                    # Create the job
+                    batch_v1.create_namespaced_job(
+                        namespace="default",
+                        body=job_manifest
+                    )
+                    
+                    return {
+                        "status": "success",
+                        "message": f"Chaos experiment '{experiment_name}' started successfully",
+                        "experiment": experiment_file
+                    }
+                    
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+
+            @app.get("/api/chaos-status")
+            async def get_chaos_status():
+                try:
+                    # Get all chaos experiment jobs
+                    jobs = batch_v1.list_namespaced_job(
+                        namespace="default",
+                        label_selector="app=chaos-experiment"
+                    )
+                    
+                    if not jobs.items:
+                        return {"running": False, "completed": False, "failed": False}
+                    
+                    # Get the latest job
+                    latest_job = max(jobs.items, key=lambda x: x.metadata.creation_timestamp)
+                    
+                    if latest_job.status.succeeded:
+                        return {"running": False, "completed": True, "failed": False}
+                    elif latest_job.status.failed:
+                        return {"running": False, "completed": False, "failed": True, "error": "Job failed"}
+                    else:
+                        return {"running": True, "completed": False, "failed": False}
+                        
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+
+            @app.get("/api/experiments")
+            async def get_experiments():
+                try:
+                    # Load experiments from configmap
+                    configmap = v1.read_namespaced_config_map(
+                        name="chaos-experiment-selector",
+                        namespace="default"
+                    )
+                    
+                    experiments_yaml = configmap.data["experiments.yaml"]
+                    experiments = yaml.safe_load(experiments_yaml)
+                    
+                    return experiments
+                    
+                except Exception as e:
+                    raise HTTPException(status_code=500, detail=str(e))
+
+            if __name__ == "__main__":
+                import uvicorn
+                uvicorn.run(app, host="0.0.0.0", port=8000)
+            EOF
+            
+            python /app/main.py
+        env:
+        - name: KUBECONFIG
+          value: "/var/run/secrets/kubernetes.io/serviceaccount"
+        volumeMounts:
+        - name: kubeconfig
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          readOnly: true
+      volumes:
+      - name: kubeconfig
+        secret:
+          secretName: chaos-api-token
+      restartPolicy: Always
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chaos-api-server
+  namespace: default
+  labels:
+    app: chaos-api
+spec:
+  selector:
+    app: chaos-api
+  ports:
+  - name: http
+    port: 8000
+    targetPort: 8000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chaos-api
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-api
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["batch"]
+  resources: ["jobs"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chaos-api
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-api
+subjects:
+- kind: ServiceAccount
+  name: chaos-api
+  namespace: default
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chaos-api-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: chaos-api
+type: kubernetes.io/service-account-token

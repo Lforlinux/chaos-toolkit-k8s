@@ -1,0 +1,347 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: chaos-experiment-runner
+  namespace: default
+  labels:
+    app: chaos-runner
+spec:
+  template:
+    metadata:
+      labels:
+        app: chaos-runner
+    spec:
+      serviceAccountName: chaos-runner
+      containers:
+      - name: chaos-runner
+        image: chaostoolkit/chaostoolkit:latest
+        command: ["/bin/sh"]
+        args:
+          - -c
+          - |
+            echo "🚀 Starting Chaos Experiment: $CHAOS_EXPERIMENT"
+            echo "📁 Experiment file: /experiments/$CHAOS_EXPERIMENT"
+            
+            # Install required chaos extensions
+            pip install chaostoolkit-kubernetes chaostoolkit-prometheus
+            
+            # Run the chaos experiment
+            chaos run /experiments/$CHAOS_EXPERIMENT --verbose
+            
+            echo "✅ Chaos experiment completed!"
+        env:
+        - name: CHAOS_EXPERIMENT
+          value: "stop-random-pod.json"  # Default experiment
+        - name: KUBECONFIG
+          value: "/var/run/secrets/kubernetes.io/serviceaccount"
+        volumeMounts:
+        - name: experiments
+          mountPath: /experiments
+        - name: kubeconfig
+          mountPath: /var/run/secrets/kubernetes.io/serviceaccount
+          readOnly: true
+      volumes:
+      - name: experiments
+        configMap:
+          name: chaos-experiments
+      - name: kubeconfig
+        secret:
+          secretName: chaos-runner-token
+      restartPolicy: Never
+  backoffLimit: 3
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chaos-runner
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chaos-runner
+rules:
+- apiGroups: [""]
+  resources: ["pods", "services", "configmaps", "secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["apps"]
+  resources: ["deployments", "replicasets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["networking.k8s.io"]
+  resources: ["networkpolicies"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chaos-runner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chaos-runner
+subjects:
+- kind: ServiceAccount
+  name: chaos-runner
+  namespace: default
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: chaos-runner-token
+  namespace: default
+  annotations:
+    kubernetes.io/service-account.name: chaos-runner
+type: kubernetes.io/service-account-token
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: chaos-experiments
+  namespace: default
+data:
+  stop-random-pod.json: |
+    {
+      "version": "1.0.0",
+      "title": "Stop Random Pod - Microservices Chaos",
+      "description": "Randomly stops a pod from the microservices deployment to test resilience",
+      "tags": ["kubernetes", "pod", "resilience"],
+      "steady-state-hypothesis": {
+        "title": "Services are running",
+        "probes": [
+          {
+            "type": "probe",
+            "name": "all-services-running",
+            "tolerance": true,
+            "provider": {
+              "type": "python",
+              "module": "chaosk8s.pod.probes",
+              "func": "pods_in_phase",
+              "arguments": {
+                "label-selector": "app in (frontend,adservice,cartservice,checkoutservice,currencyservice,emailservice,paymentservice,productcatalogservice,recommendationservice,shippingservice,redis-cart,loadgenerator)",
+                "phase": "Running",
+                "ns": "default"
+              }
+            }
+          }
+        ]
+      },
+      "method": [
+        {
+          "type": "action",
+          "name": "stop-random-pod",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.pod.actions",
+            "func": "terminate_pods",
+            "arguments": {
+              "label-selector": "app in (frontend,adservice,cartservice,checkoutservice,currencyservice,emailservice,paymentservice,productcatalogservice,recommendationservice,shippingservice,redis-cart,loadgenerator)",
+              "rand": true,
+              "count": 1,
+              "ns": "default"
+            }
+          },
+          "pauses": {
+            "after": 30
+          }
+        }
+      ],
+      "rollbacks": [
+        {
+          "type": "action",
+          "name": "restart-deployment",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.deployment.actions",
+            "func": "restart_deployment",
+            "arguments": {
+              "name": "frontend",
+              "ns": "default"
+            }
+          }
+        }
+      ]
+    }
+  modify-deployment.json: |
+    {
+      "version": "1.0.0",
+      "title": "Modify Deployment - Resource Constraints",
+      "description": "Modifies deployment resources (CPU/Memory limits) to test application behavior under resource constraints",
+      "tags": ["kubernetes", "deployment", "resources"],
+      "steady-state-hypothesis": {
+        "title": "Deployment is healthy",
+        "probes": [
+          {
+            "type": "probe",
+            "name": "deployment-ready",
+            "tolerance": true,
+            "provider": {
+              "type": "python",
+              "module": "chaosk8s.deployment.probes",
+              "func": "deployment_is_ready",
+              "arguments": {
+                "name": "frontend",
+                "ns": "default"
+              }
+            }
+          }
+        ]
+      },
+      "method": [
+        {
+          "type": "action",
+          "name": "reduce-cpu-limits",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.deployment.actions",
+            "func": "set_resources",
+            "arguments": {
+              "name": "frontend",
+              "ns": "default",
+              "requests": {
+                "cpu": "50m",
+                "memory": "64Mi"
+              },
+              "limits": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              }
+            }
+          },
+          "pauses": {
+            "after": 60
+          }
+        },
+        {
+          "type": "action",
+          "name": "scale-down-deployment",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.deployment.actions",
+            "func": "scale_deployment",
+            "arguments": {
+              "name": "frontend",
+              "ns": "default",
+              "replicas": 1
+            }
+          },
+          "pauses": {
+            "after": 30
+          }
+        }
+      ],
+      "rollbacks": [
+        {
+          "type": "action",
+          "name": "restore-cpu-limits",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.deployment.actions",
+            "func": "set_resources",
+            "arguments": {
+              "name": "frontend",
+              "ns": "default",
+              "requests": {
+                "cpu": "100m",
+                "memory": "128Mi"
+              },
+              "limits": {
+                "cpu": "200m",
+                "memory": "256Mi"
+              }
+            }
+          }
+        },
+        {
+          "type": "action",
+          "name": "scale-up-deployment",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.deployment.actions",
+            "func": "scale_deployment",
+            "arguments": {
+              "name": "frontend",
+              "ns": "default",
+              "replicas": 3
+            }
+          }
+        }
+      ]
+    }
+  network-chaos.json: |
+    {
+      "version": "1.0.0",
+      "title": "Network Chaos - Service Communication Disruption",
+      "description": "Introduces network latency and packet loss to test service communication resilience",
+      "tags": ["kubernetes", "network", "latency"],
+      "steady-state-hypothesis": {
+        "title": "Services can communicate",
+        "probes": [
+          {
+            "type": "probe",
+            "name": "frontend-reachable",
+            "tolerance": true,
+            "provider": {
+              "type": "python",
+              "module": "chaosk8s.service.probes",
+              "func": "service_is_available",
+              "arguments": {
+                "name": "frontend",
+                "ns": "default"
+              }
+            }
+          }
+        ]
+      },
+      "method": [
+        {
+          "type": "action",
+          "name": "introduce-network-latency",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.network.actions",
+            "func": "add_network_latency",
+            "arguments": {
+              "label-selector": "app=frontend",
+              "ns": "default",
+              "latency": "100ms",
+              "jitter": "10ms"
+            }
+          },
+          "pauses": {
+            "after": 45
+          }
+        },
+        {
+          "type": "action",
+          "name": "introduce-packet-loss",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.network.actions",
+            "func": "add_network_packet_loss",
+            "arguments": {
+              "label-selector": "app=frontend",
+              "ns": "default",
+              "loss": "5%"
+            }
+          },
+          "pauses": {
+            "after": 30
+          }
+        }
+      ],
+      "rollbacks": [
+        {
+          "type": "action",
+          "name": "remove-network-chaos",
+          "provider": {
+            "type": "python",
+            "module": "chaosk8s.network.actions",
+            "func": "remove_network_chaos",
+            "arguments": {
+              "label-selector": "app=frontend",
+              "ns": "default"
+            }
+          }
+        }
+      ]
+    }
