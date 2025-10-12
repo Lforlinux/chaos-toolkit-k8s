@@ -24,3 +24,8 @@ Thumbs.db
 # Local configuration
 local/
 temp/
+
+# Large binaries
+argocd-darwin-amd64
+argocd-linux-amd64
+*.exe
