@@ -8,7 +8,7 @@ data:
     #!/usr/bin/env python3
     """
     Availability Test Application for Microservices Demo
-    Tests cart service functionality: add product to cart and remove it
+    Modular test case structure for scalable testing
     """
 
     import os
@@ -32,16 +32,27 @@ data:
     test_runs = []  # List of test runs with build numbers
     current_build_number = 0
 
-    class AvailabilityTester:
+    class TestCaseManager:
+        """Manages all test cases"""
+        
         def __init__(self):
-            self.session = requests.Session()
-            self.session.timeout = 30
-            
-        def test_cart_functionality(self):
-            """Test adding and removing product from cart - Real User Simulation"""
+            self.test_cases = {
+                'cart_services': {
+                    'name': 'Cart Services Test',
+                    'description': 'Tests cart add/remove functionality',
+                    'enabled': True
+                }
+            }
+        
+        def get_enabled_test_cases(self):
+            """Get all enabled test cases"""
+            return {name: config for name, config in self.test_cases.items() if config.get('enabled', True)}
+        
+        def run_cart_services_test(self):
+            """Run cart services test case"""
             test_result = {
                 'timestamp': datetime.now().isoformat(),
-                'test_name': 'real_user_cart_test',
+                'test_name': 'cart_services_test',
                 'status': 'failed',
                 'duration': 0,
                 'error': None,
@@ -49,11 +60,13 @@ data:
             }
             
             start_time = time.time()
+            session = requests.Session()
+            session.timeout = 30
             
             try:
                 # Step 1: User visits the website (load frontend)
                 test_result['steps'].append('👤 User visits the website...')
-                frontend_response = self.session.get(f"{FRONTEND_URL}/", timeout=10)
+                frontend_response = session.get(f"{FRONTEND_URL}/", timeout=10)
                 if frontend_response.status_code != 200:
                     raise Exception(f"Frontend not accessible: {frontend_response.status_code}")
                 test_result['steps'].append(f'✅ Website loaded successfully (HTTP {frontend_response.status_code})')
@@ -91,7 +104,7 @@ data:
                 
                 # If we get here, the test passed
                 test_result['status'] = 'passed'
-                test_result['steps'].append('🎉 Real user cart test completed successfully')
+                test_result['steps'].append('🎉 Cart services test completed successfully')
                 
             except Exception as e:
                 test_result['error'] = str(e)
@@ -99,37 +112,49 @@ data:
             
             test_result['duration'] = round(time.time() - start_time, 2)
             return test_result
-        
-        def run_availability_test(self):
-            """Run the complete availability test suite"""
-            global test_runs, current_build_number
-            
-            current_build_number += 1
-            print(f"[{datetime.now()}] Starting availability test - Build #{current_build_number}...")
-            
-            # Run cart functionality test
-            cart_test = self.test_cart_functionality()
-            
-            # Create test run record
-            test_run = {
-                'build_number': current_build_number,
-                'timestamp': datetime.now().isoformat(),
-                'status': cart_test['status'],
-                'duration': cart_test['duration'],
-                'test_details': [cart_test],
-                'overall_status': 'passed' if cart_test['status'] == 'passed' else 'failed'
-            }
-            
-            # Add to test runs list (keep last 20 runs)
-            test_runs.insert(0, test_run)
-            if len(test_runs) > 20:
-                test_runs = test_runs[:20]
-            
-            print(f"[{datetime.now()}] Test completed - Build #{current_build_number}. Status: {test_run['overall_status']}")
-            return test_run
 
-    # Initialize tester
-    tester = AvailabilityTester()
+    # Initialize test case manager
+    test_manager = TestCaseManager()
+
+    def run_availability_test():
+        """Run the complete availability test suite"""
+        global test_runs, current_build_number
+        
+        current_build_number += 1
+        print(f"[{datetime.now()}] Starting availability test - Build #{current_build_number}...")
+        
+        # Run all enabled test cases
+        enabled_tests = test_manager.get_enabled_test_cases()
+        test_details = []
+        overall_status = 'passed'
+        
+        for test_name, test_config in enabled_tests.items():
+            print(f"[{datetime.now()}] Running test case: {test_config['name']}")
+            
+            if test_name == 'cart_services':
+                test_result = test_manager.run_cart_services_test()
+                test_details.append(test_result)
+                
+                if test_result['status'] == 'failed':
+                    overall_status = 'failed'
+        
+        # Create test run record
+        test_run = {
+            'build_number': current_build_number,
+            'timestamp': datetime.now().isoformat(),
+            'status': overall_status,
+            'duration': sum(test['duration'] for test in test_details),
+            'test_details': test_details,
+            'overall_status': overall_status
+        }
+        
+        # Add to test runs list (keep last 20 runs)
+        test_runs.insert(0, test_run)
+        if len(test_runs) > 20:
+            test_runs = test_runs[:20]
+        
+        print(f"[{datetime.now()}] Test completed - Build #{current_build_number}. Status: {test_run['overall_status']}")
+        return test_run
 
     def generate_build_list():
         """Generate HTML for the build list"""
@@ -160,7 +185,7 @@ data:
                 <div class="build-details" id="details-{run['build_number']}">
                     <p><strong>Timestamp:</strong> {timestamp}</p>
                     <p><strong>Duration:</strong> {run['duration']}s</p>
-                    <p><strong>Test Steps:</strong></p>
+                    <p><strong>Test Cases:</strong></p>
                     {steps_html}
                 </div>
             </div>
@@ -172,11 +197,16 @@ data:
         """Run tests periodically in background thread"""
         while True:
             try:
-                tester.run_availability_test()
+                run_availability_test()
             except Exception as e:
                 print(f"Error running periodic test: {e}")
             
             time.sleep(TEST_INTERVAL)
+
+    # Start the background thread
+    test_thread = threading.Thread(target=run_periodic_tests)
+    test_thread.daemon = True
+    test_thread.start()
 
     @app.route('/')
     def dashboard():
@@ -298,6 +328,12 @@ data:
                     font-size: 1.5em; 
                     font-weight: bold; 
                 }}
+                .test-cases-info {{
+                    background: #d1ecf1;
+                    padding: 15px;
+                    border-radius: 3px;
+                    margin-bottom: 20px;
+                }}
             </style>
         </head>
         <body>
@@ -307,6 +343,13 @@ data:
             </div>
             
             <div class="container">
+                <div class="test-cases-info">
+                    <h3>📋 Available Test Cases</h3>
+                    <ul>
+                        <li><strong>Cart Services Test:</strong> Tests cart add/remove functionality</li>
+                    </ul>
+                </div>
+                
                 <div class="summary">
                     <div class="summary-item">
                         <div class="summary-value">{len(test_runs)}</div>
@@ -371,42 +414,37 @@ data:
             'current_build_number': current_build_number,
             'total_runs': len(test_runs),
             'passed_runs': len([r for r in test_runs if r['overall_status'] == 'passed']),
-            'failed_runs': len([r for r in test_runs if r['overall_status'] == 'failed'])
+            'failed_runs': len([r for r in test_runs if r['overall_status'] == 'failed']),
+            'available_test_cases': test_manager.get_enabled_test_cases()
         })
+
+    @app.route('/api/run-test', methods=['GET', 'POST'])
+    def trigger_test():
+        """Trigger a manual test run"""
+        try:
+            result = run_availability_test()
+            return jsonify({
+                'message': 'Test completed',
+                'results': result,
+                'status': 'success'
+            }), 200
+        except Exception as e:
+            return jsonify({
+                'message': f'Test failed: {str(e)}',
+                'status': 'error'
+            }), 500
 
     @app.route('/api/health')
     def health_check():
         """Health check endpoint"""
         return jsonify({
             'status': 'healthy',
-            'timestamp': datetime.now().isoformat(),
-            'service': 'availability-test'
-        })
-
-    @app.route('/api/run-test')
-    def run_test_now():
-        """Manually trigger a test run"""
-        try:
-            results = tester.run_availability_test()
-            return jsonify({
-                'status': 'success',
-                'message': 'Test completed',
-                'results': results
-            })
-        except Exception as e:
-            return jsonify({
-                'status': 'error',
-                'message': str(e)
-            }), 500
+            'message': 'Availability Test App is running',
+            'test_cases': len(test_manager.get_enabled_test_cases())
+        }), 200
 
     if __name__ == '__main__':
-        # Start periodic testing in background thread
-        test_thread = threading.Thread(target=run_periodic_tests, daemon=True)
-        test_thread.start()
-        
-        # Run initial test
-        print("Running initial availability test...")
-        tester.run_availability_test()
-        
-        # Start Flask app
-        app.run(host='0.0.0.0', port=5000, debug=False)
+        # Initial run before starting the periodic thread
+        print("Starting initial availability test run...")
+        run_availability_test()
+        app.run(host='0.0.0.0', port=5000)
