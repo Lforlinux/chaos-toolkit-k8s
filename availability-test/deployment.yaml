@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: availability-test-app
+  namespace: availability-test
+  labels:
+    app: availability-test-app
+    component: availability-testing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: availability-test-app
+  template:
+    metadata:
+      labels:
+        app: availability-test-app
+        component: availability-testing
+    spec:
+      containers:
+      - name: availability-test
+        image: python:3.11-slim
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            pip install Flask Flask-CORS requests gunicorn
+            python /app/app.py
+        workingDir: /app
+        ports:
+        - containerPort: 5000
+          name: http
+        env:
+        - name: CART_SERVICE_URL
+          value: "http://cartservice.default.svc.cluster.local:7070"
+        - name: FRONTEND_URL
+          value: "http://frontend.default.svc.cluster.local:80"
+        - name: TEST_INTERVAL
+          value: "300"  # 5 minutes
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 12
+        volumeMounts:
+        - name: app-files
+          mountPath: /app
+      volumes:
+      - name: app-files
+        configMap:
+          name: availability-test-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: availability-test-service
+  namespace: availability-test
+  labels:
+    app: availability-test-app
+spec:
+  selector:
+    app: availability-test-app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 5000
+    protocol: TCP
+  type: ClusterIP

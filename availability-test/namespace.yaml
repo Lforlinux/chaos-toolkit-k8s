@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: availability-test
+  labels:
+    name: availability-test
+    purpose: availability-testing
