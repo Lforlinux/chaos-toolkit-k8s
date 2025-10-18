@@ -1,21 +1,21 @@
 {
   "version": "1.0.0",
-  "title": "Stop Random Pod - Microservices Chaos",
-  "description": "Randomly stops a pod from the microservices deployment to test resilience",
+  "title": "Simple Pod Chaos - Terminate Frontend Pod",
+  "description": "Terminates the frontend pod to test pod restart resilience",
   "tags": ["kubernetes", "pod", "resilience"],
   "steady-state-hypothesis": {
-    "title": "Services are running",
+    "title": "Frontend pod is running",
     "probes": [
       {
         "type": "probe",
-        "name": "all-services-running",
+        "name": "frontend-pod-running",
         "tolerance": true,
         "provider": {
           "type": "python",
           "module": "chaosk8s.pod.probes",
           "func": "pods_in_phase",
           "arguments": {
-            "label_selector": "app in (frontend,adservice,cartservice,checkoutservice,currencyservice,emailservice,paymentservice,productcatalogservice,recommendationservice,shippingservice,redis-cart,loadgenerator)",
+            "label_selector": "app=frontend",
             "phase": "Running",
             "ns": "default"
           }
@@ -26,13 +26,13 @@
   "method": [
     {
       "type": "action",
-      "name": "stop-random-pod",
+      "name": "terminate-frontend-pod",
       "provider": {
         "type": "python",
         "module": "chaosk8s.pod.actions",
         "func": "terminate_pods",
         "arguments": {
-          "label_selector": "app in (frontend,adservice,cartservice,checkoutservice,currencyservice,emailservice,paymentservice,productcatalogservice,recommendationservice,shippingservice,redis-cart,loadgenerator)",
+          "label_selector": "app=frontend",
           "rand": true,
           "count": 1,
           "ns": "default"
@@ -46,7 +46,7 @@
   "rollbacks": [
     {
       "type": "action",
-      "name": "restart-deployment",
+      "name": "restart-frontend-deployment",
       "provider": {
         "type": "python",
         "module": "chaosk8s.deployment.actions",

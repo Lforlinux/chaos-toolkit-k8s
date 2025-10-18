@@ -1,0 +1,46 @@
+{
+  "version": "1.0.0",
+  "title": "Working Pod Chaos - Chaos Toolkit",
+  "description": "Proper Chaos Toolkit experiment to terminate pods",
+  "tags": ["kubernetes", "pod", "chaos-toolkit"],
+  "steady-state-hypothesis": {
+    "title": "Frontend pod is running",
+    "probes": [
+      {
+        "type": "probe",
+        "name": "frontend-pod-running",
+        "tolerance": true,
+        "provider": {
+          "type": "python",
+          "module": "chaosk8s.pod.probes",
+          "func": "pods_in_phase",
+          "arguments": {
+            "label_selector": "app=frontend",
+            "phase": "Running",
+            "ns": "default"
+          }
+        }
+      }
+    ]
+  },
+  "method": [
+    {
+      "type": "action",
+      "name": "terminate-frontend-pod",
+      "provider": {
+        "type": "python",
+        "module": "chaosk8s.pod.actions",
+        "func": "terminate_pods",
+        "arguments": {
+          "label_selector": "app=frontend",
+          "rand": true,
+          "ns": "default"
+        }
+      },
+      "pauses": {
+        "after": 30
+      }
+    }
+  ],
+  "rollbacks": []
+}
