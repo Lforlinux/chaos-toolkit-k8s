@@ -4,7 +4,6 @@ Manages all available test cases for the availability testing application
 """
 
 from .cart_services.cart_test import CartServicesTest
-from .payment_services.payment_test import PaymentServicesTest
 
 # Registry of all available test cases
 TEST_CASES = {
@@ -12,12 +11,6 @@ TEST_CASES = {
         'name': 'Cart Services Test',
         'description': 'Tests cart add/remove functionality',
         'class': CartServicesTest,
-        'enabled': True
-    },
-    'payment_services': {
-        'name': 'Payment Services Test',
-        'description': 'Tests payment processing functionality',
-        'class': PaymentServicesTest,
         'enabled': True
     }
 }
