@@ -1,0 +1,78 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sanity-test-app
+  namespace: sanity-test
+  labels:
+    app: sanity-test-app
+    component: sanity-testing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sanity-test-app
+  template:
+    metadata:
+      labels:
+        app: sanity-test-app
+        component: sanity-testing
+    spec:
+      containers:
+      - name: sanity-test
+        image: python:3.11-slim
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            pip install Flask Flask-CORS requests gunicorn
+            python /app/app.py
+        workingDir: /app
+        ports:
+        - containerPort: 5000
+          name: http
+        env:
+        - name: NAMESPACE
+          value: "online-boutique"
+        - name: TEST_INTERVAL
+          value: "60"  # 1 minute
+        - name: TIMEOUT
+          value: "5"  # 5 seconds
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        startupProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 12
+        volumeMounts:
+        - name: app-files
+          mountPath: /app
+      volumes:
+      - name: app-files
+        configMap:
+          name: sanity-test-config
+

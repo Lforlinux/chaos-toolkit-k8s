@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: sanity-test-service
+  namespace: sanity-test
+  labels:
+    app: sanity-test-app
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  selector:
+    app: sanity-test-app
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sanity-test-loadbalancer
+  namespace: sanity-test
+  labels:
+    app: sanity-test-app
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 5000
+    protocol: TCP
+    name: http
+  selector:
+    app: sanity-test-app
+

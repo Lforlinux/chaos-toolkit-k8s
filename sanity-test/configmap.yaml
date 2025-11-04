@@ -1,0 +1,505 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sanity-test-config
+  namespace: sanity-test
+data:
+  app.py: |
+    #!/usr/bin/env python3
+    """
+    Sanity Test Application for Microservices Health Checks
+    Checks health endpoints of all microservices in online-boutique namespace
+    """
+
+    import os
+    import time
+    import json
+    import requests
+    import threading
+    from datetime import datetime
+    from flask import Flask, jsonify
+    from flask_cors import CORS
+
+    app = Flask(__name__)
+    CORS(app)
+
+    # Configuration
+    NAMESPACE = os.getenv('NAMESPACE', 'online-boutique')
+    TEST_INTERVAL = int(os.getenv('TEST_INTERVAL', '60'))  # 1 minute in seconds
+    TIMEOUT = int(os.getenv('TIMEOUT', '5'))  # 5 seconds timeout
+
+    # Microservices to check with their health endpoints
+    # Note: Use service ports (not container ports) and correct protocols
+    MICROSERVICES = {
+        'adservice': {'port': 9555, 'protocol': 'grpc', 'health_path': None},
+        'cartservice': {'port': 7070, 'protocol': 'grpc', 'health_path': None},
+        'checkoutservice': {'port': 5050, 'protocol': 'grpc', 'health_path': None},
+        'currencyservice': {'port': 7000, 'protocol': 'grpc', 'health_path': None},
+        'emailservice': {'port': 5000, 'protocol': 'grpc', 'health_path': None},  # Service port 5000, container 8080
+        'frontend': {'port': 80, 'protocol': 'http', 'health_path': '/_healthz'},  # Service port 80, container 8080
+        'paymentservice': {'port': 50051, 'protocol': 'grpc', 'health_path': None},
+        'productcatalogservice': {'port': 3550, 'protocol': 'grpc', 'health_path': None},
+        'recommendationservice': {'port': 8080, 'protocol': 'grpc', 'health_path': None},
+        'shippingservice': {'port': 50051, 'protocol': 'grpc', 'health_path': None},
+        'redis-cart': {'port': 6379, 'protocol': 'tcp', 'health_path': None}  # Redis TCP check
+    }
+
+    # Test results storage
+    test_runs = []
+    current_build_number = 0
+
+    def check_service_health(service_name, config):
+        """Check health of a single microservice"""
+        import socket
+        
+        port = config['port']
+        protocol = config.get('protocol', 'http')
+        health_path = config.get('health_path')
+        hostname = f"{service_name}.{NAMESPACE}.svc.cluster.local"
+        
+        result = {
+            'service': service_name,
+            'status': 'unknown',
+            'response_time': 0,
+            'error': None,
+            'url': f"{hostname}:{port}"
+        }
+        
+        start_time = time.time()
+        
+        try:
+            # TCP/Port connectivity check (for gRPC, Redis, etc.)
+            if protocol in ['grpc', 'tcp']:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.settimeout(TIMEOUT)
+                try:
+                    result_code = sock.connect_ex((hostname, port))
+                    sock.close()
+                    result['response_time'] = round((time.time() - start_time) * 1000, 2)
+                    
+                    if result_code == 0:
+                        result['status'] = 'passed'
+                        result['message'] = f'{protocol.upper()} port {port} is listening'
+                    else:
+                        result['status'] = 'failed'
+                        result['error'] = f'Connection refused on port {port}'
+                except socket.timeout:
+                    result['status'] = 'failed'
+                    result['error'] = f'Connection timeout after {TIMEOUT}s'
+                    result['response_time'] = round((time.time() - start_time) * 1000, 2)
+                except Exception as e:
+                    result['status'] = 'failed'
+                    result['error'] = str(e)
+                    result['response_time'] = round((time.time() - start_time) * 1000, 2)
+                
+                return result
+            
+            # HTTP health check
+            elif protocol == 'http':
+                service_url = f"http://{hostname}:{port}"
+                
+                if health_path:
+                    health_url = f"{service_url}{health_path}"
+                else:
+                    health_url = f"{service_url}/"
+                
+                # Frontend requires special headers
+                headers = {}
+                if service_name == 'frontend' and health_path == '/_healthz':
+                    headers['Cookie'] = 'shop_session-id=x-health-check'
+                
+                response = requests.get(health_url, headers=headers, timeout=TIMEOUT)
+                result['response_time'] = round((time.time() - start_time) * 1000, 2)
+                
+                if response.status_code == 200:
+                    result['status'] = 'passed'
+                    result['message'] = f'HTTP {response.status_code}'
+                else:
+                    result['status'] = 'failed'
+                    result['error'] = f'HTTP {response.status_code}'
+                    
+            else:
+                result['status'] = 'failed'
+                result['error'] = f'Unknown protocol: {protocol}'
+                
+        except requests.exceptions.Timeout:
+            result['status'] = 'failed'
+            result['error'] = f'Timeout after {TIMEOUT}s'
+            result['response_time'] = round((time.time() - start_time) * 1000, 2)
+        except requests.exceptions.ConnectionError as e:
+            result['status'] = 'failed'
+            result['error'] = f'Connection error: {str(e)}'
+            result['response_time'] = round((time.time() - start_time) * 1000, 2)
+        except Exception as e:
+            result['status'] = 'failed'
+            result['error'] = str(e)
+            result['response_time'] = round((time.time() - start_time) * 1000, 2)
+        
+        return result
+
+    def run_sanity_test():
+        """Run sanity test for all microservices"""
+        global test_runs, current_build_number
+        
+        current_build_number += 1
+        print(f"[{datetime.now()}] Starting sanity test - Build #{current_build_number}...")
+        
+        test_results = []
+        overall_status = 'passed'
+        
+        for service_name, config in MICROSERVICES.items():
+            print(f"[{datetime.now()}] Checking {service_name}...")
+            result = check_service_health(service_name, config)
+            test_results.append(result)
+            
+            if result['status'] == 'failed':
+                overall_status = 'failed'
+                print(f"[{datetime.now()}] ❌ {service_name}: FAILED - {result.get('error', 'Unknown error')}")
+            else:
+                print(f"[{datetime.now()}] ✅ {service_name}: PASSED ({result['response_time']}ms)")
+        
+        # Create test run record
+        test_run = {
+            'build_number': current_build_number,
+            'timestamp': datetime.now().isoformat(),
+            'status': overall_status,
+            'duration': sum(r['response_time'] for r in test_results),
+            'service_results': test_results,
+            'total_services': len(MICROSERVICES),
+            'passed_services': len([r for r in test_results if r['status'] == 'passed']),
+            'failed_services': len([r for r in test_results if r['status'] == 'failed'])
+        }
+        
+        # Add to test runs list (keep last 50 runs)
+        test_runs.insert(0, test_run)
+        if len(test_runs) > 50:
+            test_runs = test_runs[:50]
+        
+        print(f"[{datetime.now()}] Test completed - Build #{current_build_number}. Status: {overall_status}")
+        print(f"[{datetime.now()}] Results: {test_run['passed_services']}/{test_run['total_services']} services healthy")
+        
+        return test_run
+
+    def run_periodic_tests():
+        """Run tests periodically in background thread"""
+        while True:
+            try:
+                run_sanity_test()
+            except Exception as e:
+                print(f"Error running periodic test: {e}")
+            
+            time.sleep(TEST_INTERVAL)
+
+    # Start the background thread
+    test_thread = threading.Thread(target=run_periodic_tests)
+    test_thread.daemon = True
+    test_thread.start()
+
+    def generate_build_list():
+        """Generate HTML for the build list"""
+        if not test_runs:
+            return "<p>No test runs yet. Tests will run automatically every minute.</p>"
+        
+        html = ""
+        for run in test_runs:
+            status_class = "status-passed" if run['status'] == 'passed' else "status-failed"
+            timestamp = run['timestamp'][:19].replace('T', ' ')
+            
+            # Generate service results HTML
+            services_html = ""
+            for service_result in run['service_results']:
+                service_status_class = "service-passed" if service_result['status'] == 'passed' else "service-failed"
+                status_icon = "✅" if service_result['status'] == 'passed' else "❌"
+                error_msg = f" - {service_result.get('error', '')}" if service_result.get('error') else ""
+                services_html += f'''
+                <div class="service-result {service_status_class}">
+                    <span class="service-name">{service_result['service']}</span>
+                    <span class="service-status">{status_icon} {service_result['status'].upper()}</span>
+                    <span class="service-time">{service_result['response_time']}ms</span>
+                    {f'<span class="service-error">{error_msg}</span>' if error_msg else ''}
+                </div>
+                '''
+            
+            html += f"""
+            <div class="build-item" onclick="toggleBuild({run['build_number']})">
+                <div class="build-header">
+                    <div class="build-number">Build #{run['build_number']}</div>
+                    <div class="build-status {status_class}">{run['status']}</div>
+                </div>
+                <div class="build-details" id="details-{run['build_number']}">
+                    <p><strong>Timestamp:</strong> {timestamp}</p>
+                    <p><strong>Duration:</strong> {run['duration']:.2f}ms</p>
+                    <p><strong>Results:</strong> {run['passed_services']}/{run['total_services']} services healthy</p>
+                    <p><strong>Service Health Status:</strong></p>
+                    <div class="services-list">
+                        {services_html}
+                    </div>
+                </div>
+            </div>
+            """
+        
+        return html
+
+    @app.route('/')
+    def dashboard():
+        """Main dashboard showing test results"""
+        latest_run = test_runs[0] if test_runs else None
+        total_runs = len(test_runs)
+        passed_runs = len([r for r in test_runs if r['status'] == 'passed'])
+        failed_runs = len([r for r in test_runs if r['status'] == 'failed'])
+        
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head>
+            <title>Sanity Test Dashboard</title>
+            <style>
+                body {{ 
+                    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+                    margin: 0; 
+                    padding: 20px; 
+                    background: #f0f0f0; 
+                }}
+                .header {{ 
+                    background: #2c3e50; 
+                    color: white; 
+                    padding: 20px; 
+                    margin: -20px -20px 20px -20px; 
+                    text-align: center; 
+                }}
+                .container {{ 
+                    background: white; 
+                    padding: 20px; 
+                    border-radius: 5px; 
+                    box-shadow: 0 2px 5px rgba(0,0,0,0.1); 
+                }}
+                .summary {{ 
+                    background: #e9ecef; 
+                    padding: 15px; 
+                    border-radius: 3px; 
+                    margin-bottom: 20px; 
+                    display: flex; 
+                    justify-content: space-around; 
+                }}
+                .summary-item {{ 
+                    text-align: center; 
+                }}
+                .summary-value {{ 
+                    font-size: 2em; 
+                    font-weight: bold; 
+                }}
+                .summary-label {{ 
+                    color: #666; 
+                }}
+                .build-list {{ 
+                    margin-top: 20px; 
+                }}
+                .build-item {{ 
+                    border: 1px solid #ddd; 
+                    margin: 5px 0; 
+                    border-radius: 3px; 
+                    cursor: pointer; 
+                    transition: all 0.3s ease; 
+                }}
+                .build-item:hover {{ 
+                    box-shadow: 0 2px 8px rgba(0,0,0,0.15); 
+                }}
+                .build-header {{ 
+                    padding: 15px; 
+                    display: flex; 
+                    justify-content: space-between; 
+                    align-items: center; 
+                }}
+                .build-number {{ 
+                    font-weight: bold; 
+                    font-size: 1.2em; 
+                }}
+                .build-status {{ 
+                    padding: 5px 10px; 
+                    border-radius: 3px; 
+                    font-weight: bold; 
+                    text-transform: uppercase; 
+                    font-size: 0.9em; 
+                }}
+                .status-passed {{ 
+                    background: #28a745; 
+                    color: white; 
+                }}
+                .status-failed {{ 
+                    background: #dc3545; 
+                    color: white; 
+                }}
+                .build-details {{ 
+                    display: none; 
+                    padding: 15px; 
+                    background: #f8f9fa; 
+                    border-top: 1px solid #ddd; 
+                }}
+                .build-details.expanded {{ 
+                    display: block; 
+                }}
+                .services-list {{
+                    margin-top: 10px;
+                }}
+                .service-result {{
+                    padding: 8px;
+                    margin: 5px 0;
+                    border-radius: 3px;
+                    display: flex;
+                    justify-content: space-between;
+                    align-items: center;
+                }}
+                .service-passed {{
+                    background: #d4edda;
+                    border-left: 3px solid #28a745;
+                }}
+                .service-failed {{
+                    background: #f8d7da;
+                    border-left: 3px solid #dc3545;
+                }}
+                .service-name {{
+                    font-weight: bold;
+                    flex: 1;
+                }}
+                .service-status {{
+                    margin: 0 10px;
+                }}
+                .service-time {{
+                    color: #666;
+                    font-size: 0.9em;
+                }}
+                .service-error {{
+                    color: #dc3545;
+                    font-size: 0.85em;
+                    margin-left: 10px;
+                }}
+                .controls {{ 
+                    margin: 20px 0; 
+                    text-align: center; 
+                }}
+                .btn {{ 
+                    background: #007bff; 
+                    color: white; 
+                    border: none; 
+                    padding: 10px 20px; 
+                    border-radius: 3px; 
+                    cursor: pointer; 
+                    margin: 0 5px; 
+                }}
+                .btn:hover {{ 
+                    background: #0056b3; 
+                }}
+            </style>
+        </head>
+        <body>
+            <div class="header">
+                <h1>🏥 Microservices Sanity Test</h1>
+                <p>Health Check Dashboard for Online Boutique Services</p>
+            </div>
+            
+            <div class="container">
+                <div class="summary">
+                    <div class="summary-item">
+                        <div class="summary-value">{total_runs}</div>
+                        <div class="summary-label">Total Runs</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" style="color: #28a745;">{passed_runs}</div>
+                        <div class="summary-label">Passed</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value" style="color: #dc3545;">{failed_runs}</div>
+                        <div class="summary-label">Failed</div>
+                    </div>
+                    <div class="summary-item">
+                        <div class="summary-value">{TEST_INTERVAL}s</div>
+                        <div class="summary-label">Interval</div>
+                    </div>
+                    {f'''
+                    <div class="summary-item">
+                        <div class="summary-value" style="color: {"#28a745" if latest_run["status"] == "passed" else "#dc3545"};">{latest_run["passed_services"]}/{latest_run["total_services"]}</div>
+                        <div class="summary-label">Services Healthy</div>
+                    </div>
+                    ''' if latest_run else ''}
+                </div>
+                
+                <div class="controls">
+                    <button class="btn" onclick="runTestNow()">🔄 Run Test Now</button>
+                    <button class="btn" onclick="location.reload()">📊 Refresh</button>
+                </div>
+                
+                <div class="build-list">
+                    <h3>Test Runs (Latest First)</h3>
+                    {generate_build_list()}
+                </div>
+            </div>
+            
+            <script>
+                function toggleBuild(buildNumber) {{
+                    const details = document.getElementById('details-' + buildNumber);
+                    details.classList.toggle('expanded');
+                }}
+                
+                function runTestNow() {{
+                    fetch('/api/run-test')
+                        .then(response => response.json())
+                        .then(data => {{
+                            if (data.status === 'success') {{
+                                setTimeout(() => location.reload(), 2000);
+                            }} else {{
+                                alert('Error: ' + data.message);
+                            }}
+                        }})
+                        .catch(error => alert('Error: ' + error.message));
+                }}
+                
+                // Auto-refresh every 30 seconds
+                setInterval(() => location.reload(), 30000);
+            </script>
+        </body>
+        </html>
+        """
+
+    @app.route('/api/status')
+    def api_status():
+        """API endpoint for test status"""
+        return jsonify({
+            'test_runs': test_runs,
+            'current_build_number': current_build_number,
+            'total_runs': len(test_runs),
+            'passed_runs': len([r for r in test_runs if r['status'] == 'passed']),
+            'failed_runs': len([r for r in test_runs if r['status'] == 'failed']),
+            'microservices': list(MICROSERVICES.keys())
+        })
+
+    @app.route('/api/run-test', methods=['GET', 'POST'])
+    def trigger_test():
+        """Trigger a manual test run"""
+        try:
+            result = run_sanity_test()
+            return jsonify({
+                'message': 'Test completed',
+                'results': result,
+                'status': 'success'
+            }), 200
+        except Exception as e:
+            return jsonify({
+                'message': f'Test failed: {str(e)}',
+                'status': 'error'
+            }), 500
+
+    @app.route('/api/health')
+    def health_check():
+        """Health check endpoint"""
+        return jsonify({
+            'status': 'healthy',
+            'message': 'Sanity Test App is running',
+            'microservices_count': len(MICROSERVICES)
+        }), 200
+
+    if __name__ == '__main__':
+        # Initial run before starting the periodic thread
+        print("Starting initial sanity test run...")
+        run_sanity_test()
+        app.run(host='0.0.0.0', port=5000)
+
