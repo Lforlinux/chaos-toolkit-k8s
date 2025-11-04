@@ -24,8 +24,8 @@ data:
     CORS(app)
 
     # Configuration
-    CART_SERVICE_URL = os.getenv('CART_SERVICE_URL', 'http://cartservice.default.svc.cluster.local:7070')
-    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://frontend.default.svc.cluster.local:80')
+    CART_SERVICE_URL = os.getenv('CART_SERVICE_URL', 'http://cartservice.online-boutique.svc.cluster.local:7070')
+    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://frontend.online-boutique.svc.cluster.local:80')
     TEST_INTERVAL = int(os.getenv('TEST_INTERVAL', '300'))  # 5 minutes in seconds
 
     # Test results storage - Jenkins-like format

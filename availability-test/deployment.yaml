@@ -32,9 +32,9 @@ spec:
           name: http
         env:
         - name: CART_SERVICE_URL
-          value: "http://cartservice.default.svc.cluster.local:7070"
+          value: "http://cartservice.online-boutique.svc.cluster.local:7070"
         - name: FRONTEND_URL
-          value: "http://frontend.default.svc.cluster.local:80"
+          value: "http://frontend.online-boutique.svc.cluster.local:80"
         - name: TEST_INTERVAL
           value: "300"  # 5 minutes
         resources:
