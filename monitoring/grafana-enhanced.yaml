@@ -14,6 +14,32 @@ data:
       url: http://prometheus:9090
       isDefault: true
       editable: true
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki:3100
+      editable: true
+      jsonData:
+        maxLines: 1000
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-provider
+  namespace: monitoring
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+    - name: 'default'
+      orgId: 1
+      folder: ''
+      type: file
+      disableDeletion: false
+      updateIntervalSeconds: 10
+      allowUiUpdates: true
+      options:
+        path: /var/lib/grafana/dashboards
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -24,13 +50,12 @@ data:
   # Kubernetes Cluster Overview Dashboard
   kubernetes-cluster-overview.json: |
     {
-      "dashboard": {
-        "id": null,
-        "title": "Kubernetes Cluster Overview",
-        "tags": ["kubernetes", "cluster"],
-        "style": "dark",
-        "timezone": "browser",
-        "panels": [
+      "id": null,
+      "title": "Kubernetes Cluster Overview",
+      "tags": ["kubernetes", "cluster"],
+      "style": "dark",
+      "timezone": "browser",
+      "panels": [
           {
             "id": 1,
             "title": "Cluster CPU Usage",
@@ -103,19 +128,17 @@ data:
           "to": "now"
         },
         "refresh": "30s"
-      }
     }
   
   # Microservice Application Dashboard
   microservice-application.json: |
     {
-      "dashboard": {
-        "id": null,
-        "title": "Microservice Application Monitoring",
-        "tags": ["microservice", "application"],
-        "style": "dark",
-        "timezone": "browser",
-        "panels": [
+      "id": null,
+      "title": "Microservice Application Monitoring",
+      "tags": ["microservice", "application"],
+      "style": "dark",
+      "timezone": "browser",
+      "panels": [
           {
             "id": 1,
             "title": "Service Health Status",
@@ -205,15 +228,15 @@ data:
             "type": "table",
             "targets": [
               {
-                "expr": "kube_deployment_status_replicas{namespace=\"default\"}",
+                "expr": "kube_deployment_status_replicas{namespace=\"online-boutique\"}",
                 "legendFormat": "Desired"
               },
               {
-                "expr": "kube_deployment_status_replicas_ready{namespace=\"default\"}",
+                "expr": "kube_deployment_status_replicas_ready{namespace=\"online-boutique\"}",
                 "legendFormat": "Ready"
               },
               {
-                "expr": "kube_deployment_status_replicas_available{namespace=\"default\"}",
+                "expr": "kube_deployment_status_replicas_available{namespace=\"online-boutique\"}",
                 "legendFormat": "Available"
               }
             ],
@@ -225,26 +248,24 @@ data:
           "to": "now"
         },
         "refresh": "30s"
-      }
     }
   
   # Pod Details Dashboard
   pod-details.json: |
     {
-      "dashboard": {
-        "id": null,
-        "title": "Pod Details Monitoring",
-        "tags": ["kubernetes", "pods"],
-        "style": "dark",
-        "timezone": "browser",
-        "panels": [
+      "id": null,
+      "title": "Pod Details Monitoring",
+      "tags": ["kubernetes", "pods"],
+      "style": "dark",
+      "timezone": "browser",
+      "panels": [
           {
             "id": 1,
             "title": "Pod Status by Namespace",
             "type": "table",
             "targets": [
               {
-                "expr": "kube_pod_status_phase{namespace=\"default\"}",
+                "expr": "kube_pod_status_phase{namespace=\"online-boutique\"}",
                 "legendFormat": "{{pod}} - {{phase}}"
               }
             ],
@@ -256,7 +277,7 @@ data:
             "type": "timeseries",
             "targets": [
               {
-                "expr": "kube_pod_container_status_restarts_total{namespace=\"default\"}",
+                "expr": "kube_pod_container_status_restarts_total{namespace=\"online-boutique\"}",
                 "legendFormat": "{{pod}} - {{container}}"
               }
             ],
@@ -274,11 +295,11 @@ data:
             "type": "timeseries",
             "targets": [
               {
-                "expr": "kube_pod_container_resource_requests{namespace=\"default\", resource=\"cpu\"}",
+                "expr": "kube_pod_container_resource_requests{namespace=\"online-boutique\", resource=\"cpu\"}",
                 "legendFormat": "{{pod}} - {{container}} - CPU Request"
               },
               {
-                "expr": "kube_pod_container_resource_limits{namespace=\"default\", resource=\"cpu\"}",
+                "expr": "kube_pod_container_resource_limits{namespace=\"online-boutique\", resource=\"cpu\"}",
                 "legendFormat": "{{pod}} - {{container}} - CPU Limit"
               }
             ],
@@ -296,11 +317,11 @@ data:
             "type": "timeseries",
             "targets": [
               {
-                "expr": "kube_pod_container_resource_requests{namespace=\"default\", resource=\"memory\"}",
+                "expr": "kube_pod_container_resource_requests{namespace=\"online-boutique\", resource=\"memory\"}",
                 "legendFormat": "{{pod}} - {{container}} - Memory Request"
               },
               {
-                "expr": "kube_pod_container_resource_limits{namespace=\"default\", resource=\"memory\"}",
+                "expr": "kube_pod_container_resource_limits{namespace=\"online-boutique\", resource=\"memory\"}",
                 "legendFormat": "{{pod}} - {{container}} - Memory Limit"
               }
             ],
@@ -318,7 +339,6 @@ data:
           "to": "now"
         },
         "refresh": "30s"
-      }
     }
 ---
 apiVersion: apps/v1
@@ -362,6 +382,8 @@ spec:
           mountPath: /var/lib/grafana
         - name: grafana-datasources
           mountPath: /etc/grafana/provisioning/datasources
+        - name: grafana-dashboard-provider
+          mountPath: /etc/grafana/provisioning/dashboards
         - name: grafana-dashboards
           mountPath: /var/lib/grafana/dashboards
         livenessProbe:
@@ -382,6 +404,9 @@ spec:
       - name: grafana-datasources
         configMap:
           name: grafana-datasources
+      - name: grafana-dashboard-provider
+        configMap:
+          name: grafana-dashboard-provider
       - name: grafana-dashboards
         configMap:
           name: grafana-dashboards
@@ -414,6 +439,6 @@ spec:
     app: grafana
   ports:
   - name: http
-    port: 3000
+    port: 80
     targetPort: 3000
   type: LoadBalancer

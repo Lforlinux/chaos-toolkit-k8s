@@ -310,6 +310,6 @@ spec:
     app: prometheus
   ports:
   - name: web
-    port: 9090
+    port: 80
     targetPort: 9090
   type: LoadBalancer

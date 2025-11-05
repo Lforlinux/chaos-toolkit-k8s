@@ -1,0 +1,8 @@
+loki:
+  serviceName: loki
+  servicePort: 3100
+
+config:
+  clients:
+    - url: http://loki.monitoring.svc.cluster.local:3100/loki/api/v1/push
+
