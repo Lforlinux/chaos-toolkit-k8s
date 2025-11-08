@@ -58,19 +58,19 @@ fi
 
 # Deploy monitoring namespace and components
 print_status "Deploying monitoring namespace and RBAC..."
-kubectl apply -f prometheus-enhanced.yaml
+kubectl apply -f monitoring/prometheus/prometheus-enhanced.yaml
 print_success "Prometheus and RBAC deployed"
 
 print_status "Deploying kube-state-metrics..."
-kubectl apply -f kube-state-metrics.yaml
+kubectl apply -f monitoring/prometheus/kube-state-metrics.yaml
 print_success "kube-state-metrics deployed"
 
 print_status "Deploying node-exporter..."
-kubectl apply -f node-exporter.yaml
+kubectl apply -f monitoring/prometheus/node-exporter.yaml
 print_success "node-exporter deployed"
 
 print_status "Deploying enhanced Grafana with dashboards..."
-kubectl apply -f grafana-enhanced.yaml
+kubectl apply -f monitoring/grafana/grafana-enhanced.yaml
 print_success "Enhanced Grafana deployed"
 
 print_status "Updating microservice application with monitoring annotations..."
