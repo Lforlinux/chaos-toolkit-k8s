@@ -1,0 +1,489 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: k8s-demo
+  labels:
+    name: k8s-demo
+    purpose: project-dashboard
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: demo-service-config
+  namespace: k8s-demo
+data:
+  app.py: |
+    from flask import Flask, render_template_string
+    import os
+    
+    app = Flask(__name__)
+    
+    # Get service URLs from environment or use AWS ALB LoadBalancer addresses as defaults
+    FRONTEND_URL = os.getenv('FRONTEND_URL', 'http://a1d42886f1799409181ba2a9d587f8f4-774576907.eu-west-1.elb.amazonaws.com')
+    PROMETHEUS_URL = os.getenv('PROMETHEUS_URL', 'http://a1856c6bc6ccc40cc845553115fea817-85318716.eu-west-1.elb.amazonaws.com')
+    GRAFANA_URL = os.getenv('GRAFANA_URL', 'http://a5dee8dfe96c74d3ab14dd739db63fcb-1707028299.eu-west-1.elb.amazonaws.com')
+    LOKI_URL = os.getenv('LOKI_URL', 'http://loki.monitoring.svc.cluster.local:3100')  # No external LB, keep internal
+    ARGOCD_URL = os.getenv('ARGOCD_URL', 'https://argocd-server.argocd.svc.cluster.local:443')  # Port-forward access
+    SANITY_TEST_URL = os.getenv('SANITY_TEST_URL', 'http://ac433a6c35d2e43e8a6d0d413237755f-643708902.eu-west-1.elb.amazonaws.com')
+    AVAILABILITY_TEST_URL = os.getenv('AVAILABILITY_TEST_URL', 'http://a8a89d7419c344ba580c4258444fa80d-959833546.eu-west-1.elb.amazonaws.com')
+    
+    HTML_TEMPLATE = '''
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>K8s SRE Project Dashboard</title>
+        <style>
+            * {
+                margin: 0;
+                padding: 0;
+                box-sizing: border-box;
+            }
+            body {
+                font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: #333;
+                line-height: 1.6;
+                padding: 20px;
+            }
+            .container {
+                max-width: 1200px;
+                margin: 0 auto;
+                background: white;
+                border-radius: 10px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+                overflow: hidden;
+            }
+            header {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 40px;
+                text-align: center;
+            }
+            header h1 {
+                font-size: 2.5em;
+                margin-bottom: 10px;
+            }
+            header p {
+                font-size: 1.2em;
+                opacity: 0.9;
+            }
+            .content {
+                padding: 40px;
+            }
+            .section {
+                margin-bottom: 40px;
+                padding: 30px;
+                background: #f8f9fa;
+                border-radius: 8px;
+                border-left: 4px solid #667eea;
+            }
+            .section h2 {
+                color: #667eea;
+                margin-bottom: 15px;
+                font-size: 1.8em;
+            }
+            .section p {
+                margin-bottom: 15px;
+                color: #555;
+                font-size: 1.1em;
+            }
+            .service-grid {
+                display: grid;
+                grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+                gap: 20px;
+                margin-top: 20px;
+            }
+            .service-card {
+                background: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                transition: transform 0.3s;
+            }
+            .service-card:hover {
+                transform: translateY(-5px);
+                box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            }
+            .service-card h3 {
+                color: #667eea;
+                margin-bottom: 10px;
+                font-size: 1.3em;
+            }
+            .service-card p {
+                color: #666;
+                margin-bottom: 15px;
+                font-size: 0.95em;
+            }
+            .service-url {
+                display: inline-block;
+                background: #667eea;
+                color: white;
+                padding: 8px 16px;
+                border-radius: 5px;
+                text-decoration: none;
+                font-weight: bold;
+                transition: background 0.3s;
+            }
+            .service-url:hover {
+                background: #5568d3;
+            }
+            .badge {
+                display: inline-block;
+                padding: 4px 12px;
+                border-radius: 12px;
+                font-size: 0.85em;
+                font-weight: bold;
+                margin-left: 10px;
+            }
+            .badge-primary {
+                background: #667eea;
+                color: white;
+            }
+            .badge-success {
+                background: #28a745;
+                color: white;
+            }
+            .badge-info {
+                background: #17a2b8;
+                color: white;
+            }
+            ul {
+                list-style: none;
+                padding-left: 0;
+            }
+            ul li {
+                padding: 8px 0;
+                border-bottom: 1px solid #eee;
+            }
+            ul li:before {
+                content: "▸ ";
+                color: #667eea;
+                font-weight: bold;
+                margin-right: 10px;
+            }
+            .footer {
+                text-align: center;
+                padding: 20px;
+                background: #f8f9fa;
+                color: #666;
+                border-top: 1px solid #eee;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <header>
+                <h1>🚀 K8s SRE Project Dashboard</h1>
+                <p>Kubernetes Site Reliability Engineering Platform</p>
+            </header>
+            
+            <div class="content">
+                <div class="section">
+                    <h2>📋 About This Project</h2>
+                    <p>
+                        This is a comprehensive Kubernetes Site Reliability Engineering (SRE) platform demonstrating 
+                        microservices deployment, observability, testing, and GitOps practices. The project showcases 
+                        modern cloud-native technologies and best practices for running production workloads on Kubernetes.
+                    </p>
+                    <p>
+                        The platform includes a complete microservices e-commerce application (Online Boutique), 
+                        comprehensive monitoring and logging, continuous delivery via GitOps, and automated testing 
+                        frameworks for reliability assurance.
+                    </p>
+                </div>
+                
+                <div class="section">
+                    <h2>🛍️ Online Boutique Microservices</h2>
+                    <p>
+                        A Google Cloud microservices demo application showcasing a 12-tier e-commerce application. 
+                        The application consists of multiple microservices written in different languages (Java, Go, Python, Node.js, C#) 
+                        communicating via gRPC and HTTP.
+                    </p>
+                    <div class="service-grid">
+                        <div class="service-card">
+                            <h3>Frontend Service <span class="badge badge-primary">Web UI</span></h3>
+                            <p>Main web interface for the e-commerce application</p>
+                            <a href="{{ frontend_url }}" target="_blank" class="service-url">Access Frontend</a>
+                        </div>
+                    </div>
+                    <p><strong>Namespace:</strong> <code>online-boutique</code></p>
+                    <p><strong>Services:</strong> frontend, cartservice, checkoutservice, productcatalogservice, 
+                       recommendationservice, currencyservice, paymentservice, shippingservice, 
+                       emailservice, adservice, redis-cart</p>
+                </div>
+                
+                <div class="section">
+                    <h2>🧪 Testing Frameworks</h2>
+                    
+                    <h3 style="margin-top: 20px; color: #333;">Sanity Test</h3>
+                    <p>
+                        Automated health check framework that continuously validates the health endpoints of all 
+                        microservices in the online-boutique namespace. It tests connectivity, response times, and 
+                        service availability for each microservice (gRPC, HTTP, and TCP protocols).
+                    </p>
+                    <div class="service-grid">
+                        <div class="service-card">
+                            <h3>Sanity Test Dashboard <span class="badge badge-success">Health Checks</span></h3>
+                            <p>Real-time health status of all microservices</p>
+                            <a href="{{ sanity_test_url }}" target="_blank" class="service-url">View Dashboard</a>
+                        </div>
+                    </div>
+                    <p><strong>Namespace:</strong> <code>sanity-test</code></p>
+                    <p><strong>Tests:</strong> All microservices in online-boutique namespace</p>
+                    
+                    <h3 style="margin-top: 30px; color: #333;">Availability Test</h3>
+                    <p>
+                        Continuous availability testing framework that runs periodic tests (every 5 minutes) on critical 
+                        services (Cart Service and Frontend Service). It provides a dashboard showing test history, 
+                        success rates, and failure analysis.
+                    </p>
+                    <div class="service-grid">
+                        <div class="service-card">
+                            <h3>Availability Test Dashboard <span class="badge badge-info">Continuous Testing</span></h3>
+                            <p>Test history and availability metrics</p>
+                            <a href="{{ availability_test_url }}" target="_blank" class="service-url">View Dashboard</a>
+                        </div>
+                    </div>
+                    <p><strong>Namespace:</strong> <code>availability-test</code></p>
+                    <p><strong>Test Interval:</strong> 300 seconds (5 minutes)</p>
+                    <p><strong>Tests:</strong> Cart Service, Frontend Service</p>
+                </div>
+                
+                <div class="section">
+                    <h2>🔄 Continuous Delivery (GitOps)</h2>
+                    <p>
+                        ArgoCD is used for GitOps-based continuous delivery, automatically syncing applications from 
+                        Git repositories to Kubernetes clusters. All deployments are managed declaratively through 
+                        Git, ensuring version control, audit trails, and consistent deployments.
+                    </p>
+                    <div class="service-grid">
+                        <div class="service-card">
+                            <h3>ArgoCD UI <span class="badge badge-primary">GitOps</span></h3>
+                            <p>GitOps continuous delivery platform</p>
+                            <p><strong>Access:</strong> Port-forward required (kubectl port-forward -n argocd svc/argocd-server 8080:443)</p>
+                            <p><strong>URL:</strong> https://localhost:8080</p>
+                        </div>
+                    </div>
+                    <p style="margin-top: 20px;"><strong>Internal URL:</strong> <code>{{ argocd_url }}</code></p>
+                    <p><strong>Namespace:</strong> <code>argocd</code></p>
+                    <p><strong>Applications Managed:</strong></p>
+                    <ul>
+                        <li>Microservices Demo (online-boutique)</li>
+                        <li>Monitoring Stack (Prometheus, Grafana, Loki)</li>
+                        <li>Availability Test Framework</li>
+                        <li>Sanity Test Framework</li>
+                    </ul>
+                    <p><strong>Features:</strong></p>
+                    <ul>
+                        <li>Automatic sync from Git repositories</li>
+                        <li>Self-healing deployments</li>
+                        <li>Application health monitoring</li>
+                        <li>Rollback capabilities</li>
+                    </ul>
+                </div>
+                
+                <div class="section">
+                    <h2>📊 Monitoring & Observability</h2>
+                    <p>
+                        Comprehensive observability stack providing metrics, logs, and visualization for the entire 
+                        Kubernetes platform. The stack follows industry best practices for monitoring cloud-native applications.
+                    </p>
+                    
+                    <div class="service-grid">
+                        <div class="service-card">
+                            <h3>Prometheus <span class="badge badge-primary">Metrics</span></h3>
+                            <p>Time-series metrics database and monitoring system</p>
+                            <p><strong>Features:</strong> Metrics collection, alerting, PromQL queries</p>
+                            <a href="{{ prometheus_url }}" target="_blank" class="service-url">Access Prometheus</a>
+                        </div>
+                        
+                        <div class="service-card">
+                            <h3>Grafana <span class="badge badge-success">Visualization</span></h3>
+                            <p>Analytics and visualization platform</p>
+                            <p><strong>Features:</strong> Dashboards, metrics visualization, log queries</p>
+                            <a href="{{ grafana_url }}" target="_blank" class="service-url">Access Grafana</a>
+                        </div>
+                        
+                        <div class="service-card">
+                            <h3>Loki <span class="badge badge-info">Logs</span></h3>
+                            <p>Log aggregation system (Prometheus-inspired)</p>
+                            <p><strong>Features:</strong> Log collection, LogQL queries, log visualization</p>
+                            <p><small>Access via Grafana Explore (no direct UI)</small></p>
+                        </div>
+                    </div>
+                    
+                    <h3 style="margin-top: 30px; color: #333;">Prometheus</h3>
+                    <p><strong>Namespace:</strong> <code>monitoring</code></p>
+                    <p><strong>What it monitors:</strong></p>
+                    <ul>
+                        <li>Kubernetes cluster metrics (nodes, pods, services)</li>
+                        <li>Application metrics from microservices</li>
+                        <li>Kube State Metrics (cluster state)</li>
+                        <li>Node Exporter (host metrics)</li>
+                    </ul>
+                    
+                    <h3 style="margin-top: 30px; color: #333;">Grafana</h3>
+                    <p><strong>Namespace:</strong> <code>monitoring</code></p>
+                    <p><strong>Data Sources:</strong> Prometheus (metrics), Loki (logs)</p>
+                    <p><strong>Features:</strong></p>
+                    <ul>
+                        <li>Pre-configured dashboards for Kubernetes monitoring</li>
+                        <li>Custom dashboards for microservices</li>
+                        <li>Log exploration with LogQL</li>
+                        <li>Metrics visualization with PromQL</li>
+                        <li>Alerting and notification rules</li>
+                    </ul>
+                    
+                    <h3 style="margin-top: 30px; color: #333;">Loki</h3>
+                    <p><strong>Namespace:</strong> <code>monitoring</code></p>
+                    <p><strong>Log Collection:</strong> Promtail (DaemonSet) collects logs from all pods</p>
+                    <p><strong>Access:</strong> Via Grafana Explore (Loki data source)</p>
+                    <p><strong>Features:</strong></p>
+                    <ul>
+                        <li>Centralized log aggregation from all namespaces</li>
+                        <li>LogQL query language (similar to PromQL)</li>
+                        <li>Label-based log indexing</li>
+                        <li>Log retention and storage</li>
+                    </ul>
+                </div>
+            </div>
+            
+            <div class="footer">
+                <p>K8s SRE Project Dashboard | Built with Flask | Kubernetes Native</p>
+                <p style="margin-top: 10px; font-size: 0.9em;">
+                    Last updated: {{ timestamp }}
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+    
+    @app.route('/')
+    def index():
+        from datetime import datetime
+        return render_template_string(
+            HTML_TEMPLATE,
+            frontend_url=FRONTEND_URL,
+            prometheus_url=PROMETHEUS_URL,
+            grafana_url=GRAFANA_URL,
+            loki_url=LOKI_URL,
+            argocd_url=ARGOCD_URL,
+            sanity_test_url=SANITY_TEST_URL,
+            availability_test_url=AVAILABILITY_TEST_URL,
+            timestamp=datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+        )
+    
+    @app.route('/health')
+    def health():
+        return {'status': 'ok', 'service': 'demo-service'}, 200
+    
+    if __name__ == '__main__':
+        app.run(host='0.0.0.0', port=8080, debug=False)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-service
+  namespace: k8s-demo
+  labels:
+    app: demo-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-service
+  template:
+    metadata:
+      labels:
+        app: demo-service
+    spec:
+      containers:
+      - name: demo-service
+        image: python:3.11-slim
+        command: ["/bin/bash"]
+        args:
+          - -c
+          - |
+            pip install Flask --quiet
+            python /app/app.py
+        workingDir: /app
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: FRONTEND_URL
+          value: "http://a1d42886f1799409181ba2a9d587f8f4-774576907.eu-west-1.elb.amazonaws.com"
+        - name: PROMETHEUS_URL
+          value: "http://a1856c6bc6ccc40cc845553115fea817-85318716.eu-west-1.elb.amazonaws.com"
+        - name: GRAFANA_URL
+          value: "http://a5dee8dfe96c74d3ab14dd739db63fcb-1707028299.eu-west-1.elb.amazonaws.com"
+        - name: LOKI_URL
+          value: "http://loki.monitoring.svc.cluster.local:3100"
+        - name: ARGOCD_URL
+          value: "https://argocd-server.argocd.svc.cluster.local:443"
+        - name: SANITY_TEST_URL
+          value: "http://ac433a6c35d2e43e8a6d0d413237755f-643708902.eu-west-1.elb.amazonaws.com"
+        - name: AVAILABILITY_TEST_URL
+          value: "http://a8a89d7419c344ba580c4258444fa80d-959833546.eu-west-1.elb.amazonaws.com"
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+        resources:
+          requests:
+            cpu: 100m
+            memory: 128Mi
+          limits:
+            cpu: 200m
+            memory: 256Mi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+      volumes:
+      - name: app-code
+        configMap:
+          name: demo-service-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-service
+  namespace: k8s-demo
+  labels:
+    app: demo-service
+spec:
+  type: ClusterIP
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  selector:
+    app: demo-service
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-service-external
+  namespace: k8s-demo
+  labels:
+    app: demo-service
+spec:
+  type: LoadBalancer
+  ports:
+  - port: 80
+    targetPort: 8080
+    name: http
+  selector:
+    app: demo-service
+
