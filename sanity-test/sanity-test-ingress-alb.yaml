@@ -1,0 +1,49 @@
+# Optional: Ingress configuration for HTTPS support with AWS ALB
+# This requires:
+# 1. AWS Load Balancer Controller installed in your cluster
+# 2. SSL certificate in AWS Certificate Manager (ACM)
+# 3. Proper IAM permissions for the controller
+#
+# To use this:
+# 1. Get your ACM certificate ARN:
+#    aws acm list-certificates --region us-east-1
+# 2. Replace YOUR_CERT_ARN below with your certificate ARN
+# 3. Apply this file: kubectl apply -f sanity-test-ingress-alb.yaml
+# 4. Delete the LoadBalancer service (optional, Ingress will create ALB)
+#
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sanity-test-alb-ingress
+  namespace: sanity-test
+  annotations:
+    # Use AWS Load Balancer Controller
+    kubernetes.io/ingress.class: alb
+    # Create internet-facing ALB
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    # Route to pod IPs directly
+    alb.ingress.kubernetes.io/target-type: ip
+    # Backend uses HTTP (your app runs on HTTP)
+    alb.ingress.kubernetes.io/backend-protocol: HTTP
+    # Listen on both HTTP and HTTPS
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    # Redirect HTTP to HTTPS
+    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    # Your ACM certificate ARN (REPLACE THIS)
+    alb.ingress.kubernetes.io/certificate-arn: YOUR_CERT_ARN
+    # Health check path
+    alb.ingress.kubernetes.io/healthcheck-path: /api/health
+    # Health check interval
+    alb.ingress.kubernetes.io/healthcheck-interval-seconds: '30'
+spec:
+  rules:
+  - http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: sanity-test-service
+            port:
+              number: 80
+
