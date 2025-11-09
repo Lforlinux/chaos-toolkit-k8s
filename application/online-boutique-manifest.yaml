@@ -651,7 +651,7 @@ spec:
             drop:
               - ALL
           privileged: false
-          readOnlyRootFilesystem: true
+          readOnlyRootFilesystem: false
         image: redis:alpine
         ports:
         - containerPort: 6379
@@ -669,9 +669,9 @@ spec:
         resources:
           limits:
             memory: 256Mi
-            cpu: 125m
+            cpu: 500m
           requests:
-            cpu: 70m
+            cpu: 100m
             memory: 200Mi
       volumes:
       - name: redis-data
