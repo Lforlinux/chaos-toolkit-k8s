@@ -1,23 +1,28 @@
-apiVersion: argoproj.io/v1alpha1
-kind: Application
-metadata:
-  name: chaos-experiments
-  namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
-spec:
-  project: default
-  source:
-    path: chaos
-    repoURL: https://github.com/Lforlinux/chaos-toolkit-k8s.git
-    targetRevision: HEAD
-  destination:
-    server: https://kubernetes.default.svc
-    namespace: default
-  syncPolicy:
-    syncOptions:
-      - CreateNamespace=true
-    automated:
-      prune: true
-      selfHeal: true
-  revisionHistoryLimit: 10
+# apiVersion: argoproj.io/v1alpha1
+# kind: Application
+# metadata:
+#   name: chaos-experiments
+#   namespace: argocd
+#   annotations:
+#     argocd.argoproj.io/sync-wave: "99"
+#     argocd.argoproj.io/refresh: "normal"
+#   finalizers:
+#     - resources-finalizer.argocd.argoproj.io
+# spec:
+#   project: default
+#   source:
+#     path: chaos
+#     repoURL: https://github.com/Lforlinux/chaos-toolkit-k8s.git
+#     targetRevision: HEAD
+#   destination:
+#     server: https://kubernetes.default.svc
+#     namespace: default
+#   # Manual sync only - this is a placeholder, not auto-deployed
+#   syncPolicy:
+#     syncOptions:
+#       - CreateNamespace=true
+#     # No automated sync - manual sync only
+#     # automated:
+#     #   prune: true
+#     #   selfHeal: true
+#   revisionHistoryLimit: 10
