@@ -2,12 +2,24 @@
 
 This repository serves as a comprehensive platform toolkit for deploying and managing applications on Kubernetes clusters (both internal and external). It provides a complete set of applications for monitoring, testing, chaos engineering, and microservices demonstration, all managed through GitOps principles using ArgoCD.
 
+## 🔗 Relationship with Infrastructure Repository
+
+This repository (**k8s-platform-toolkit**) is a **feeder service** for the [**k8s-infrastructure-as-code**](https://github.com/Lforlinux/k8s-infrastructure-as-code) repository. 
+
+**Architecture Overview:**
+- **k8s-infrastructure-as-code**: Contains the complete Kubernetes infrastructure (EKS cluster, networking, security groups, IAM, etc.) and deploys ArgoCD
+- **k8s-platform-toolkit** (this repo): Supplies the app-of-apps repository location and stores all application source code and manifests
+
+When the infrastructure repository deploys ArgoCD, it automatically references this repository through the app-of-apps pattern, which then deploys all platform applications defined here.
+
 ## 🎯 Repository Purpose
 
 The **k8s-platform-toolkit** repository is designed to provide a standardized set of platform applications that can be deployed to any Kubernetes cluster. It serves as:
 
 - **Platform Services Repository**: Centralized location for all platform-level applications
 - **GitOps Source of Truth**: Single source for application configurations and deployments
+- **App-of-Apps Source**: Provides the repository location and application definitions for the infrastructure repository's ArgoCD deployment
+- **Application Code Storage**: Contains all application source code, manifests, and configurations
 - **Multi-Cluster Support**: Can deploy to internal or external Kubernetes clusters
 - **Observability & Testing Suite**: Complete monitoring, testing, and chaos engineering tools
 
@@ -345,9 +357,11 @@ Applications deploy in the following order:
 ## 🌐 Repository Information
 
 - **Repository**: `https://github.com/Lforlinux/k8s-platform-toolkit.git`
-- **Purpose**: Platform toolkit for Kubernetes clusters
-- **Deployment**: GitOps via ArgoCD
+- **Purpose**: Platform toolkit for Kubernetes clusters (feeder service for infrastructure repository)
+- **Infrastructure Repository**: [k8s-infrastructure-as-code](https://github.com/Lforlinux/k8s-infrastructure-as-code) - Contains complete Kubernetes infrastructure
+- **Deployment**: GitOps via ArgoCD (deployed by infrastructure repository)
 - **Target**: Internal and external Kubernetes clusters
+- **Role**: Supplies app-of-apps repository location and all application source code
 
 ## 📝 License
 
