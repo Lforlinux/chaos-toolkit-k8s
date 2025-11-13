@@ -11,7 +11,7 @@ spec:
   project: default
   source:
     path: sanity-test
-    repoURL: https://github.com/Lforlinux/chaos-toolkit-k8s.git
+    repoURL: git@github.com:Lforlinux/k8s-platform-toolkit.git
     targetRevision: HEAD
   destination:
     server: https://kubernetes.default.svc

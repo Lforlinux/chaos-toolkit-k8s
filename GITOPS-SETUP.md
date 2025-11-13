@@ -5,7 +5,7 @@ Your Kubernetes GitOps repository is now fully configured and deployed!
 ## 🚀 **What's Been Set Up:**
 
 ### **✅ Git Repository**
-- **Repository:** `https://github.com/Lforlinux/chaos-toolkit-k8s.git`
+- **Repository:** `git@github.com:Lforlinux/k8s-platform-toolkit.git`
 - **All files committed and pushed**
 - **Proper .gitignore configured**
 
@@ -146,7 +146,7 @@ git push origin main
 
 ## 📚 **Resources:**
 
-- **Repository:** https://github.com/Lforlinux/chaos-toolkit-k8s.git
+- **Repository:** git@github.com:Lforlinux/k8s-platform-toolkit.git
 - **ArgoCD UI:** http://a7bdc31c3dc1d40b6a7864152748bc10-1109434892.eu-west-1.elb.amazonaws.com/applications
 - **Documentation:** See `docs/` and `argocd/` directories
 
