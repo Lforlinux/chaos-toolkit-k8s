@@ -1,0 +1,27 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: performance-testing
+  namespace: argocd
+  annotations:
+    argocd.argoproj.io/sync-wave: "10"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    path: performance-testing/k8s-manifest
+    repoURL: https://github.com/Lforlinux/k8s-platform-toolkit.git
+    targetRevision: HEAD
+    kustomize: {}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: performance-testing
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
+    automated:
+      prune: true
+      selfHeal: true
+  revisionHistoryLimit: 10
+

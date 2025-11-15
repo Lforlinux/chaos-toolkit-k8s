@@ -1,0 +1,62 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: statsd-exporter
+  namespace: performance-testing
+  labels:
+    app: statsd-exporter
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9102"
+spec:
+  selector:
+    app: statsd-exporter
+  ports:
+  - name: statsd
+    port: 9125
+    targetPort: 9125
+    protocol: UDP
+  - name: metrics
+    port: 9102
+    targetPort: 9102
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: statsd-exporter
+  namespace: performance-testing
+  labels:
+    app: statsd-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: statsd-exporter
+  template:
+    metadata:
+      labels:
+        app: statsd-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9102"
+    spec:
+      containers:
+      - name: statsd-exporter
+        image: prom/statsd-exporter:latest
+        ports:
+        - containerPort: 9125
+          protocol: UDP
+          name: statsd
+        - containerPort: 9102
+          name: metrics
+        args:
+          - '--statsd.listen-udp=:9125'
+          - '--web.listen-address=:9102'
+        resources:
+          requests:
+            cpu: 50m
+            memory: 64Mi
+          limits:
+            cpu: 200m
+            memory: 128Mi
+

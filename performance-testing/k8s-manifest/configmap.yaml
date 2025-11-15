@@ -1,0 +1,450 @@
+apiVersion: v1
+data:
+  k6-load-test.js: |+
+    // k6 Load Test - Normal expected load
+    // Purpose: Test application performance under expected production load
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+    import { Rate } from 'k6/metrics';
+    import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
+
+    // Custom metrics
+    const errorRate = new Rate('errors');
+    const frontendErrorRate = new Rate('frontend_errors');
+    const backendErrorRate = new Rate('backend_errors');
+
+    // Test configuration
+    export const options = {
+      stages: [
+        { duration: '2m', target: 50 },   // Ramp up to 50 users
+        { duration: '5m', target: 50 },   // Stay at 50 users (normal load)
+        { duration: '2m', target: 100 },  // Ramp up to 100 users
+        { duration: '5m', target: 100 },  // Stay at 100 users
+        { duration: '2m', target: 0 },    // Ramp down to 0 users
+      ],
+      thresholds: {
+        http_req_duration: ['p(95)<3000', 'p(99)<5000'], // 95% < 3s, 99% < 5s
+        http_req_failed: ['rate<0.05'],                  // Error rate < 5%
+        errors: ['rate<0.05'],
+        frontend_errors: ['rate<0.10'],
+        backend_errors: ['rate<0.05'],
+      },
+    };
+
+    const BASE_URL = __ENV.TARGET_URL || 'http://frontend.online-boutique.svc.cluster.local';
+
+    export default function () {
+      // ============================================
+      // LAYER 1: FRONTEND TESTS (HTTP)
+      // ============================================
+      let frontendWorking = false;
+
+      // Test 1: Homepage
+      try {
+        let response = http.get(`${BASE_URL}/`);
+        let success = check(response, {
+          'frontend homepage loads': (r) => r.status === 200,
+          'frontend homepage has products': (r) => r.body.includes('product') || r.body.includes('item') || r.body.includes('Online Boutique'),
+        });
+        frontendWorking = success;
+        frontendErrorRate.add(!success);
+        errorRate.add(!success);
+      } catch (error) {
+        frontendErrorRate.add(1);
+        errorRate.add(1);
+      }
+      sleep(Math.random() * 2 + 1); // Random sleep 1-3s
+
+      // Test 2: Product Details Page (simulate browsing)
+      if (frontendWorking) {
+        try {
+          const products = ['OLJCESPC7Z', '66VCHSJNUP', '1YMWWN1N4O', 'L9ECAV7KIM', '2ZYFJ3GM2N'];
+          const productId = products[Math.floor(Math.random() * products.length)];
+          const response = http.get(`${BASE_URL}/product/${productId}`);
+          const success = check(response, {
+            'frontend product page loads': (r) => r.status === 200 || r.status === 404,
+            'frontend product page responds': (r) => r.status === 200 || (r.status === 404 && r.body.length > 0),
+          });
+          frontendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          frontendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      }
+      sleep(Math.random() * 3 + 2);
+
+      // ============================================
+      // LAYER 2: BACKEND TESTS (via Health Check)
+      // ============================================
+      // Test 3: Health Check (validates backend services)
+      if (frontendWorking) {
+        try {
+          const response = http.get(`${BASE_URL}/_healthz`);
+          const success = check(response, {
+            'backend health check works': (r) => r.status === 200,
+          });
+          backendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          backendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      } else {
+        backendErrorRate.add(0); // Don't fail if frontend is down
+      }
+      sleep(Math.random() * 2 + 1);
+
+      // Test 4: Another product page (simulate continued browsing)
+      if (frontendWorking) {
+        try {
+          const products = ['OLJCESPC7Z', '66VCHSJNUP', '1YMWWN1N4O', 'L9ECAV7KIM', '2ZYFJ3GM2N'];
+          const productId2 = products[Math.floor(Math.random() * products.length)];
+          const response = http.get(`${BASE_URL}/product/${productId2}`);
+          const success = check(response, {
+            'frontend second product page loads': (r) => r.status === 200 || r.status === 404,
+          });
+          frontendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          frontendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      }
+      sleep(Math.random() * 2 + 1);
+    }
+
+    export function handleSummary(data) {
+      return {
+        'stdout': textSummary(data, { indent: ' ', enableColors: true }),
+      };
+    }
+
+  k6-smoke-test.js: |
+    // k6 Smoke Test - Basic functionality test with minimal load
+    // Tests both Frontend (HTTP) and Backend (via health checks) in one file
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+    import { Rate } from 'k6/metrics';
+    import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
+
+    const errorRate = new Rate('errors');
+    const frontendErrorRate = new Rate('frontend_errors');
+    const backendErrorRate = new Rate('backend_errors');
+
+    export const options = {
+      stages: [
+        { duration: '1m', target: 1 },
+        { duration: '2m', target: 1 },
+        { duration: '1m', target: 0 },
+      ],
+      thresholds: {
+        http_req_duration: ['p(95)<2000'],
+        http_req_failed: ['rate<0.01'],
+        errors: ['rate<0.01'],
+        frontend_errors: ['rate<0.10'],
+        backend_errors: ['rate<0.05'],
+      },
+    };
+
+    const BASE_URL = __ENV.TARGET_URL || 'http://frontend.online-boutique.svc.cluster.local';
+
+    export default function () {
+      // ============================================
+      // LAYER 1: FRONTEND TESTS (HTTP)
+      // ============================================
+      let frontendWorking = false;
+
+      // Test 1: Homepage
+      try {
+        let response = http.get(`${BASE_URL}/`);
+        let success = check(response, {
+          'frontend homepage status is 200': (r) => r.status === 200,
+          'frontend homepage has products': (r) => r.body.includes('product') || r.body.includes('item') || r.body.includes('Online Boutique'),
+        });
+        frontendWorking = success;
+        frontendErrorRate.add(!success);
+        errorRate.add(!success);
+      } catch (error) {
+        frontendErrorRate.add(1);
+        errorRate.add(1);
+        console.log(`⚠️ Frontend connection failed: ${error.message}`);
+      }
+      sleep(1);
+
+      // Test 2: Product Details Page
+      if (frontendWorking) {
+        try {
+          const products = ['OLJCESPC7Z', '66VCHSJNUP', '1YMWWN1N4O', 'L9ECAV7KIM', '2ZYFJ3GM2N'];
+          const productId = products[Math.floor(Math.random() * products.length)];
+          const response = http.get(`${BASE_URL}/product/${productId}`);
+          const success = check(response, {
+            'frontend product page status is 200 or 404': (r) => r.status === 200 || r.status === 404,
+            'frontend product page loads': (r) => r.status === 200 || (r.status === 404 && r.body.length > 0),
+          });
+          frontendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          frontendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      }
+      sleep(1);
+
+      // ============================================
+      // LAYER 2: BACKEND TESTS (via Health Check)
+      // ============================================
+      // Test 3: Health Check Endpoint (validates backend services)
+      if (frontendWorking) {
+        try {
+          const response = http.get(`${BASE_URL}/_healthz`);
+          const success = check(response, {
+            'backend health check status is 200': (r) => r.status === 200,
+          });
+          backendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          backendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      } else {
+        console.log('⚠️ Frontend down - cannot test backend via HTTP');
+        backendErrorRate.add(0); // Don't fail test if we can't verify
+      }
+      sleep(1);
+    }
+
+    export function handleSummary(data) {
+      return {
+        'stdout': textSummary(data, { indent: ' ', enableColors: true }),
+      };
+    }
+  k6-spike-test.js: |
+    // k6 Spike Test - Sudden traffic spikes
+    // Tests both Frontend (HTTP) and Backend (via health checks) in one file
+    // Purpose: Test how the application handles sudden traffic spikes
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+    import { Rate } from 'k6/metrics';
+    import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
+
+    const errorRate = new Rate('errors');
+    const frontendErrorRate = new Rate('frontend_errors');
+    const backendErrorRate = new Rate('backend_errors');
+
+    export const options = {
+      stages: [
+        { duration: '1m', target: 10 },
+        { duration: '30s', target: 500 },
+        { duration: '1m', target: 500 },
+        { duration: '30s', target: 10 },
+        { duration: '1m', target: 10 },
+        { duration: '30s', target: 1000 },
+        { duration: '1m', target: 1000 },
+        { duration: '30s', target: 10 },
+        { duration: '1m', target: 0 },
+      ],
+      thresholds: {
+        http_req_duration: ['p(95)<5000'],
+        http_req_failed: ['rate<0.30'],
+        errors: ['rate<0.30'],
+        frontend_errors: ['rate<0.40'],
+        backend_errors: ['rate<0.30'],
+      },
+    };
+
+    const BASE_URL = __ENV.TARGET_URL || 'http://frontend.online-boutique.svc.cluster.local';
+
+    export default function () {
+      // ============================================
+      // LAYER 1: FRONTEND TESTS (HTTP)
+      // ============================================
+      let frontendWorking = false;
+
+      // Test 1: Homepage (during traffic spike)
+      try {
+        let response = http.get(`${BASE_URL}/`);
+        let success = check(response, {
+          'frontend homepage responds': (r) => r.status === 200 || r.status === 503 || r.status === 429,
+        });
+        frontendWorking = success;
+        frontendErrorRate.add(!success);
+        errorRate.add(!success);
+      } catch (error) {
+        frontendErrorRate.add(1);
+        errorRate.add(1);
+      }
+      sleep(0.2);
+
+      // Test 2: Product Details Page (rapid requests during spike)
+      if (frontendWorking) {
+        try {
+          const products = ['OLJCESPC7Z', '66VCHSJNUP', '1YMWWN1N4O', 'L9ECAV7KIM', '2ZYFJ3GM2N'];
+          const productId = products[Math.floor(Math.random() * products.length)];
+          const response = http.get(`${BASE_URL}/product/${productId}`);
+          const success = check(response, {
+            'frontend product page responds': (r) => r.status === 200 || r.status === 404 || r.status === 503 || r.status === 429,
+          });
+          frontendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          frontendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      }
+      sleep(0.2);
+
+      // ============================================
+      // LAYER 2: BACKEND TESTS (via Health Check)
+      // ============================================
+      // Test 3: Health Check (monitor during spike)
+      if (frontendWorking) {
+        try {
+          const response = http.get(`${BASE_URL}/_healthz`);
+          const success = check(response, {
+            'backend health check responds': (r) => r.status === 200 || r.status === 503 || r.status === 429,
+          });
+          backendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          backendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      } else {
+        backendErrorRate.add(0); // Don't fail if frontend is down
+      }
+      sleep(0.2);
+    }
+
+    export function handleSummary(data) {
+      return {
+        'stdout': textSummary(data, { indent: ' ', enableColors: true }),
+      };
+    }
+  k6-stress-test.js: |
+    // k6 Stress Test - Test application limits
+    // Tests both Frontend (HTTP) and Backend (via health checks) in one file
+    // Purpose: Find the breaking point and maximum capacity of the application
+    import http from 'k6/http';
+    import { check, sleep } from 'k6';
+    import { Rate } from 'k6/metrics';
+    import { textSummary } from 'https://jslib.k6.io/k6-summary/0.0.1/index.js';
+
+    const errorRate = new Rate('errors');
+    const frontendErrorRate = new Rate('frontend_errors');
+    const backendErrorRate = new Rate('backend_errors');
+
+    export const options = {
+      stages: [
+        { duration: '2m', target: 100 },
+        { duration: '5m', target: 100 },
+        { duration: '2m', target: 200 },
+        { duration: '5m', target: 200 },
+        { duration: '2m', target: 300 },
+        { duration: '5m', target: 300 },
+        { duration: '2m', target: 400 },
+        { duration: '5m', target: 400 },
+        { duration: '2m', target: 500 },
+        { duration: '5m', target: 500 },
+        { duration: '10m', target: 0 },
+      ],
+      thresholds: {
+        http_req_duration: ['p(95)<10000'],
+        http_req_failed: ['rate<0.20'],
+        errors: ['rate<0.20'],
+        frontend_errors: ['rate<0.30'],
+        backend_errors: ['rate<0.20'],
+      },
+    };
+
+    const BASE_URL = __ENV.TARGET_URL || 'http://frontend.online-boutique.svc.cluster.local';
+
+    export default function () {
+      // ============================================
+      // LAYER 1: FRONTEND TESTS (HTTP)
+      // ============================================
+      let frontendWorking = false;
+
+      // Test 1: Homepage (under stress)
+      try {
+        let response = http.get(`${BASE_URL}/`);
+        let success = check(response, {
+          'frontend homepage responds': (r) => r.status === 200 || r.status === 503,
+        });
+        frontendWorking = success;
+        frontendErrorRate.add(!success);
+        errorRate.add(!success);
+      } catch (error) {
+        frontendErrorRate.add(1);
+        errorRate.add(1);
+      }
+      sleep(0.5);
+
+      // Test 2: Product Details Page (rapid browsing under stress)
+      if (frontendWorking) {
+        try {
+          const products = ['OLJCESPC7Z', '66VCHSJNUP', '1YMWWN1N4O', 'L9ECAV7KIM', '2ZYFJ3GM2N'];
+          const productId = products[Math.floor(Math.random() * products.length)];
+          const response = http.get(`${BASE_URL}/product/${productId}`);
+          const success = check(response, {
+            'frontend product page responds': (r) => r.status === 200 || r.status === 404 || r.status === 503,
+          });
+          frontendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          frontendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      }
+      sleep(0.5);
+
+      // ============================================
+      // LAYER 2: BACKEND TESTS (via Health Check)
+      // ============================================
+      // Test 3: Health Check (monitor during stress)
+      if (frontendWorking) {
+        try {
+          const response = http.get(`${BASE_URL}/_healthz`);
+          const success = check(response, {
+            'backend health check responds': (r) => r.status === 200 || r.status === 503,
+          });
+          backendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          backendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      } else {
+        backendErrorRate.add(0); // Don't fail if frontend is down
+      }
+      sleep(0.3);
+
+      // Test 4: Another product page (multiple concurrent requests)
+      if (frontendWorking) {
+        try {
+          const products = ['OLJCESPC7Z', '66VCHSJNUP', '1YMWWN1N4O', 'L9ECAV7KIM', '2ZYFJ3GM2N'];
+          const productId2 = products[Math.floor(Math.random() * products.length)];
+          const response = http.get(`${BASE_URL}/product/${productId2}`);
+          const success = check(response, {
+            'frontend second product page responds': (r) => r.status === 200 || r.status === 404 || r.status === 503,
+          });
+          frontendErrorRate.add(!success);
+          errorRate.add(!success);
+        } catch (error) {
+          frontendErrorRate.add(1);
+          errorRate.add(1);
+        }
+      }
+      sleep(0.3);
+    }
+
+    export function handleSummary(data) {
+      return {
+        'stdout': textSummary(data, { indent: ' ', enableColors: true }),
+      };
+    }
+kind: ConfigMap
+metadata:
+  creationTimestamp: null
+  name: k6-test-scripts
+  namespace: performance-testing

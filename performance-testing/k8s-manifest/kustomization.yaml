@@ -1,0 +1,15 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: performance-testing
+
+# Resources to be deployed via ArgoCD (infrastructure only)
+resources:
+  - namespace.yaml
+  - configmap.yaml
+  - statsd-exporter.yaml
+
+# Note: job-*.yaml and cronjob-*.yaml are excluded
+# These are for on-demand manual execution via run-test.sh
+# Using statsd-exporter for Prometheus integration (k6 latest removed statsd support)
+
