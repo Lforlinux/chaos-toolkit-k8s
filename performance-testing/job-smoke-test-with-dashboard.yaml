@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-smoke-test-dashboard
+  namespace: performance-testing
+  labels:
+    app: k6-performance-test
+    test-type: smoke
+spec:
+  ttlSecondsAfterFinished: 3600
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: k6-performance-test
+        test-type: smoke
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: k6
+        image: grafana/k6:latest
+        command: ["k6", "run"]
+        args:
+          - "--out"
+          - "web-dashboard"
+          - "--out"
+          - "json=/tmp/results.json"
+          - "/scripts/k6-smoke-test.js"
+        env:
+        - name: TARGET_URL
+          value: "http://frontend-external.online-boutique.svc.cluster.local"
+        - name: K6_WEB_DASHBOARD_HOST
+          value: "0.0.0.0"
+        ports:
+        - name: dashboard
+          containerPort: 5665
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: test-scripts
+          mountPath: /scripts
+        - name: results
+          mountPath: /tmp
+      volumes:
+      - name: test-scripts
+        configMap:
+          name: k6-test-scripts
+      - name: results
+        emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k6-smoke-test-dashboard
+  namespace: performance-testing
+  labels:
+    app: k6-performance-test
+    test-type: smoke
+spec:
+  type: ClusterIP
+  selector:
+    app: k6-performance-test
+    test-type: smoke
+  ports:
+  - name: dashboard
+    port: 5665
+    targetPort: 5665
+    protocol: TCP
+

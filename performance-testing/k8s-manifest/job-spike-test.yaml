@@ -1,0 +1,53 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k6-spike-test
+  namespace: performance-testing
+  labels:
+    app: k6-performance-test
+    test-type: spike
+spec:
+  ttlSecondsAfterFinished: 3600  # Keep job for 1 hour after completion
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        app: k6-performance-test
+        test-type: spike
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: k6
+        image: grafana/k6:0.50.0
+        command: ["k6", "run"]
+        args:
+          - "--out"
+          - "json=/tmp/results.json"
+          - "--summary-export=/tmp/summary.json"
+          - "--out"
+          - "statsd"
+          - "/scripts/k6-spike-test.js"
+        env:
+        - name: TARGET_URL
+          value: "http://frontend-external.online-boutique.svc.cluster.local"
+        - name: K6_STATSD_ADDR
+          value: "statsd-exporter.performance-testing.svc.cluster.local:9125"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: test-scripts
+          mountPath: /scripts
+        - name: results
+          mountPath: /tmp
+      volumes:
+      - name: test-scripts
+        configMap:
+          name: k6-test-scripts
+      - name: results
+        emptyDir: {}
+

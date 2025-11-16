@@ -1,21 +1,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: monitoring-stack
+  name: performance-testing
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "3"
+    argocd.argoproj.io/sync-wave: "10"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
-    path: monitoring
-    repoURL:  https://github.com/Lforlinux/k8s-platform-toolkit.git
+    path: performance-testing/k8s-manifest
+    repoURL: https://github.com/Lforlinux/k8s-platform-toolkit.git
     targetRevision: feature/k6-performance-testing
+    kustomize: {}
   destination:
     server: https://kubernetes.default.svc
-    namespace: monitoring
+    namespace: performance-testing
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
@@ -23,3 +24,4 @@ spec:
       prune: true
       selfHeal: true
   revisionHistoryLimit: 10
+
