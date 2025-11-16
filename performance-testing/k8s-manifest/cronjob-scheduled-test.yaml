@@ -36,7 +36,7 @@ spec:
             - name: TARGET_URL
               value: "http://frontend-external.online-boutique.svc.cluster.local"
             - name: K6_STATSD_ADDR
-              value: "10.100.184.18:9125"
+              value: "statsd-exporter.performance-testing.svc.cluster.local:9125"
             resources:
               requests:
                 memory: "256Mi"

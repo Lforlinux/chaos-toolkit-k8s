@@ -50,6 +50,7 @@ spec:
         - containerPort: 9102
           name: metrics
         args:
+          - '--statsd.mapping-config=/etc/statsd/mapping.yaml'
           - '--statsd.listen-udp=:9125'
           - '--web.listen-address=:9102'
         resources:
@@ -59,4 +60,26 @@ spec:
           limits:
             cpu: 200m
             memory: 128Mi
+        volumeMounts:
+        - name: statsd-mapping
+          mountPath: /etc/statsd
+      volumes:
+      - name: statsd-mapping
+        configMap:
+          name: statsd-exporter-mapping
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: statsd-exporter-mapping
+  namespace: performance-testing
+data:
+  mapping.yaml: |
+    mappings:
+    - match: "k6\\.(?P<metric_name>[^\\.]+)\\.(?P<metric_type>[^\\.]+)"
+      name: "k6_${metric_name}"
+      labels:
+        metric_type: "${metric_type}"
+    - match: "k6\\.(?P<metric_name>[^\\.]+)"
+      name: "k6_${metric_name}"
 
