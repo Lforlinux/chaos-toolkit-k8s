@@ -25,11 +25,13 @@ spec:
           - "json=/tmp/results.json"
           - "--summary-export=/tmp/summary.json"
           - "--out"
-          - "statsd=statsd-exporter.performance-testing.svc.cluster.local:9125"
+          - "statsd"
           - "/scripts/k6-stress-test.js"
         env:
         - name: TARGET_URL
           value: "http://frontend-external.online-boutique.svc.cluster.local"
+        - name: K6_STATSD_ADDR
+          value: "statsd-exporter.performance-testing.svc.cluster.local:9125"
         resources:
           requests:
             memory: "256Mi"
