@@ -30,7 +30,7 @@ spec:
               - "--out"
               - "json=/tmp/results.json"
               - "--out"
-              - "statsd=udp://statsd-exporter.performance-testing.svc.cluster.local:9125"
+              - "statsd=statsd-exporter.performance-testing.svc.cluster.local:9125"
               - "/scripts/k6-smoke-test.js"
             env:
             - name: TARGET_URL
