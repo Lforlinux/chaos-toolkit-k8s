@@ -42,7 +42,7 @@ spec:
     spec:
       containers:
       - name: statsd-exporter
-        image: prom/statsd-exporter:latest
+        image: prom/statsd-exporter:v0.28.0
         ports:
         - containerPort: 9125
           protocol: UDP
@@ -76,10 +76,12 @@ metadata:
 data:
   mapping.yaml: |
     mappings:
-    - match: "k6\\.([^\\.]+)\\.([^\\.]+)"
+    - match: "^k6\\.([^.]+)\\.([^.]+)$"
+      match_type: regex
       name: "k6_${1}"
       labels:
         metric_type: "${2}"
-    - match: "k6\\.([^\\.]+)"
+    - match: "^k6\\.([^.]+)$"
+      match_type: regex
       name: "k6_${1}"
 
