@@ -9,7 +9,7 @@ spec:
   project: default
   source:
     repoURL: git@github.com:Lforlinux/k8s-platform-toolkit.git
-    targetRevision: feature/k6-performance-testing
+    targetRevision: HEAD
     path: argocd/apps
     directory:
       recurse: true
