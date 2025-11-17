@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gatekeeper-system
+  labels:
+    name: gatekeeper-system
+    # Add this label to prevent Gatekeeper from managing itself
+    # Note: This label can only be set on exempt namespaces
+    # If Gatekeeper is already installed, this namespace may already exist
+    admission.gatekeeper.sh/ignore: "no-self-managing"
+

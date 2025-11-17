@@ -1,0 +1,16 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sDisallowLatestTag
+metadata:
+  name: online-boutique-disallow-latest-tag
+  annotations:
+    description: "Disallows :latest tags (DEMO MODE)"
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["online-boutique"]
+  parameters:
+    message: "Container images cannot use :latest tag or no tag"
+

@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Deploy OPA Gatekeeper and all policies via Kustomize
+# Usage: kubectl apply -k opa/
+# Delete: kubectl delete -k opa/  (deletes everything including namespace)
+
+resources:
+  # 1. Install Gatekeeper first (includes namespace, CRDs, deployments, etc.)
+  - gatekeeper.yaml
+  
+  # 2. Then deploy all policy manifests (ConstraintTemplates and Constraints)
+  - k8s-policy-manifest/
+
+# Common labels for all resources
+labels:
+  - pairs:
+      app: opa-policies
+      managed-by: kustomize
+
+# Note: Resources are applied in order:
+# 1. Gatekeeper (namespace, CRDs, controller)
+# 2. ConstraintTemplates (policy definitions)
+# 3. Constraints (policy enforcement)
+#
+# If constraints fail on first apply, wait a few seconds for CRDs to be ready and apply again:
+#   sleep 10 && kubectl apply -k opa/

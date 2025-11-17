@@ -1,0 +1,15 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredNonRoot
+metadata:
+  name: online-boutique-must-run-nonroot
+  annotations:
+    description: "Enforces that all pods in online-boutique namespace run as non-root users"
+spec:
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["online-boutique"]
+  parameters:
+    message: "All pods in online-boutique namespace must run as non-root users for security compliance"
+

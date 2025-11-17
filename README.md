@@ -37,6 +37,7 @@ The **k8s-platform-toolkit** repository is designed to provide a standardized se
 ├── dashboards/          # Grafana dashboard configurations
 ├── docs/                # Additional documentation
 ├── monitoring/          # Monitoring stack (Prometheus, Grafana, Loki)
+├── opa/                 # OPA Gatekeeper policies for security enforcement
 └── sanity-test/         # Health check testing application
 ```
 

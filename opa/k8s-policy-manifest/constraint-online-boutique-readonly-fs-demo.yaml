@@ -1,0 +1,16 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredReadonlyFS
+metadata:
+  name: online-boutique-require-readonly-fs
+  annotations:
+    description: "Requires read-only root filesystem (DEMO MODE)"
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["online-boutique"]
+  parameters:
+    message: "All containers must have readOnlyRootFilesystem: true"
+

@@ -1,0 +1,36 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Note: No default namespace set - ConstraintTemplates and Constraints are cluster-scoped resources
+# The namespace.yaml creates gatekeeper-system namespace explicitly
+
+# ConstraintTemplates (policy definitions)
+resources:
+  # Note: namespace.yaml is excluded - Gatekeeper creates gatekeeper-system namespace during installation
+  # If you need to create it manually, use: kubectl create namespace gatekeeper-system
+
+  # Security Policies - ConstraintTemplates
+  - constrainttemplate-require-nonroot.yaml
+  - constrainttemplate-require-resource-limits.yaml
+  - constrainttemplate-disallow-latest-tag.yaml
+  - constrainttemplate-require-readonly-fs.yaml
+  - constrainttemplate-disallow-privileged.yaml
+  - constrainttemplate-require-labels.yaml
+
+  # Constraints (applied to online-boutique namespace in dryrun mode)
+  - constraint-online-boutique-nonroot-demo.yaml
+  - constraint-online-boutique-resource-limits-demo.yaml
+  - constraint-online-boutique-latest-tag-demo.yaml
+  - constraint-online-boutique-readonly-fs-demo.yaml
+  - constraint-online-boutique-privileged-demo.yaml
+  - constraint-online-boutique-required-labels-demo.yaml
+
+# Note: constraint-online-boutique-nonroot.yaml (enforce mode) is excluded
+# Use switch-enforcement-mode.sh to change modes
+
+# Common labels for all resources
+labels:
+  - pairs:
+      app: opa-policies
+      managed-by: kustomize
+
