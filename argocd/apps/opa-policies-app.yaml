@@ -21,6 +21,7 @@ spec:
     syncOptions:
       - CreateNamespace=true
       - PruneLast=true  # Prune resources last (after all resources are synced)
+      - RespectSyncWave=true  # Respect sync waves to ensure proper ordering
     automated:
       prune: true
       selfHeal: true

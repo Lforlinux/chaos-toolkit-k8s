@@ -1,0 +1,73 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: wait-for-constrainttemplate-crds
+  namespace: gatekeeper-system
+  annotations:
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    argocd.argoproj.io/sync-wave: "0.5"  # Between ConstraintTemplates (0) and Constraints (1)
+spec:
+  template:
+    spec:
+      serviceAccountName: default
+      restartPolicy: OnFailure
+      containers:
+      - name: wait-for-crds
+        image: bitnami/kubectl:latest
+        command:
+        - /bin/sh
+        - -c
+        - |
+          echo "Waiting for ConstraintTemplate CRDs to be established..."
+          
+          # List of ConstraintTemplate CRDs that need to be ready
+          # These are created by Gatekeeper after ConstraintTemplates are applied
+          CRDS=(
+            "k8srequirednonroots.constraints.gatekeeper.sh"
+            "k8srequiredresources.constraints.gatekeeper.sh"
+            "k8sdisallowlatesttags.constraints.gatekeeper.sh"
+            "k8srequiredreadonlyfs.constraints.gatekeeper.sh"
+            "k8sdisallowprivilegeds.constraints.gatekeeper.sh"
+            "k8srequiredlabels.constraints.gatekeeper.sh"
+          )
+          
+          echo "Waiting for ConstraintTemplates to be processed by Gatekeeper..."
+          sleep 5  # Give Gatekeeper a moment to process ConstraintTemplates
+          
+          # Wait for each CRD to be established
+          for CRD in "${CRDS[@]}"; do
+            echo "Waiting for CRD: $CRD"
+            MAX_ATTEMPTS=24
+            ATTEMPT=0
+            while [ $ATTEMPT -lt $MAX_ATTEMPTS ]; do
+              if kubectl get crd $CRD &>/dev/null; then
+                kubectl wait --for=condition=established \
+                  crd/$CRD \
+                  --timeout=10s && {
+                  echo "✅ CRD $CRD is ready!"
+                  break
+                }
+              fi
+              ATTEMPT=$((ATTEMPT + 1))
+              echo "⏳ Attempt $ATTEMPT/$MAX_ATTEMPTS: CRD $CRD not found yet, waiting..."
+              sleep 5
+            done
+            
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "⚠️  CRD $CRD not ready after $MAX_ATTEMPTS attempts"
+            fi
+          done
+          
+          # Also wait for Gatekeeper controller to be ready (in case it's not)
+          echo "Waiting for Gatekeeper controller to be ready..."
+          kubectl wait --for=condition=ready \
+            pod -l control-plane=controller-manager \
+            -n gatekeeper-system \
+            --timeout=60s || {
+              echo "⚠️  Gatekeeper controller not ready, but continuing..."
+            }
+          
+          echo "✅ ConstraintTemplate CRDs are ready!"
+          sleep 3  # Give CRDs a moment to fully propagate
+

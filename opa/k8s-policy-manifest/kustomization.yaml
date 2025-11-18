@@ -9,6 +9,10 @@ resources:
   # Note: namespace.yaml is excluded - Gatekeeper creates gatekeeper-system namespace during installation
   # If you need to create it manually, use: kubectl create namespace gatekeeper-system
 
+  # PreSync Hook: Wait for ConstraintTemplate CRDs before applying Constraints
+  # This runs in wave 0.5 (after ConstraintTemplates wave 0, before Constraints wave 1)
+  - pre-sync-wait-crds.yaml
+
   # Security Policies - ConstraintTemplates
   - constrainttemplate-require-nonroot.yaml
   - constrainttemplate-require-resource-limits.yaml
@@ -29,6 +33,7 @@ resources:
 # Use switch-enforcement-mode.sh to change modes
 
 # Add sync wave annotations for ArgoCD ordering
+# PreSync Hook (wave -1) waits for CRDs
 # ConstraintTemplates (wave 0) must come before Constraints (wave 1)
 # This ensures ConstraintTemplate CRDs are created before Constraints try to use them
 patches:
@@ -42,6 +47,7 @@ patches:
       kind: ConstraintTemplate
   # Wave 1: Constraints (policy enforcement)
   # These use the CRDs created by ConstraintTemplates
+  # The PreSync hook ensures CRDs are ready before these are applied
   - patch: |-
       - op: add
         path: /metadata/annotations/argocd.argoproj.io~1sync-wave
