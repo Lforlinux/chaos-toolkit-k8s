@@ -5,13 +5,14 @@ kind: Kustomization
 # The namespace.yaml creates gatekeeper-system namespace explicitly
 
 # ConstraintTemplates (policy definitions)
+# NOTE: This kustomization is for manual kubectl apply only
+# For ArgoCD, use:
+# - constrainttemplates-only-kustomization.yaml (opa-constrainttemplates-app)
+# - constraints-only-kustomization.yaml (opa-constraints-app)
+
 resources:
   # Note: namespace.yaml is excluded - Gatekeeper creates gatekeeper-system namespace during installation
   # If you need to create it manually, use: kubectl create namespace gatekeeper-system
-
-  # PreSync Hook: Wait for ConstraintTemplate CRDs before applying Constraints
-  # This runs in wave 0.5 (after ConstraintTemplates wave 0, before Constraints wave 1)
-  - pre-sync-wait-crds.yaml
 
   # Security Policies - ConstraintTemplates
   - constrainttemplate-require-nonroot.yaml

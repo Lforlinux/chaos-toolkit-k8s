@@ -1,0 +1,30 @@
+apiVersion: templates.gatekeeper.sh/v1beta1
+kind: ConstraintTemplate
+metadata:
+  name: k8srequiredreadonlyfs
+  annotations:
+    description: "Requires all containers to have read-only root filesystem"
+spec:
+  crd:
+    spec:
+      names:
+        kind: K8sRequiredReadonlyFS
+  targets:
+    - target: admission.k8s.gatekeeper.sh
+      rego: |
+        package k8srequiredreadonlyfs
+
+        violation[{"msg": msg}] {
+            container := input.review.object.spec.containers[_]
+            not container.securityContext.readOnlyRootFilesystem
+            not input.review.object.spec.securityContext.readOnlyRootFilesystem
+            msg := sprintf("Container '%v' must have readOnlyRootFilesystem: true", [container.name])
+        }
+
+        violation[{"msg": msg}] {
+            container := input.review.object.spec.initContainers[_]
+            not container.securityContext.readOnlyRootFilesystem
+            not input.review.object.spec.securityContext.readOnlyRootFilesystem
+            msg := sprintf("Init container '%v' must have readOnlyRootFilesystem: true", [container.name])
+        }
+

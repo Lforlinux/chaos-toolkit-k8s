@@ -1,10 +1,10 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: opa-policies
+  name: opa-constraints
   namespace: argocd
   annotations:
-    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/sync-wave: "3"
   finalizers:
     - resources-finalizer.argocd.argoproj.io
 spec:
@@ -12,7 +12,7 @@ spec:
   source:
     repoURL: https://github.com/Lforlinux/k8s-platform-toolkit.git
     targetRevision: HEAD
-    path: opa/k8s-policy-manifest
+    path: opa/k8s-policy-manifest/constraints-only
     kustomize: {}
   destination:
     server: https://kubernetes.default.svc
@@ -20,8 +20,8 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
-      - PruneLast=true  # Prune resources last (after all resources are synced)
-      - RespectSyncWave=true  # Respect sync waves to ensure proper ordering
+      - PruneLast=true
+      - RespectSyncWave=true
     automated:
       prune: true
       selfHeal: true

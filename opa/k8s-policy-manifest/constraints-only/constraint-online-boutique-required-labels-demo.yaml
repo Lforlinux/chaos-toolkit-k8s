@@ -1,0 +1,20 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredLabels
+metadata:
+  name: online-boutique-require-labels
+  annotations:
+    description: "Requires specific labels (DEMO MODE)"
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["online-boutique"]
+  parameters:
+    labels:
+      - "app"
+      - "team"
+      - "environment"
+    message: "Pods must have labels: app, team, environment"
+

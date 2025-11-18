@@ -1,0 +1,16 @@
+apiVersion: constraints.gatekeeper.sh/v1beta1
+kind: K8sRequiredResources
+metadata:
+  name: online-boutique-require-resource-limits
+  annotations:
+    description: "Requires CPU and memory limits on all containers (DEMO MODE)"
+spec:
+  enforcementAction: dryrun
+  match:
+    kinds:
+      - apiGroups: [""]
+        kinds: ["Pod"]
+    namespaces: ["online-boutique"]
+  parameters:
+    message: "All containers must have CPU and memory limits"
+

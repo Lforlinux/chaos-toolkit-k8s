@@ -1,0 +1,31 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Kustomization for ConstraintTemplates only (used by opa-constrainttemplates-app.yaml)
+# Constraints are deployed separately via opa-constraints-app.yaml
+
+resources:
+  # Only include ConstraintTemplates
+  - constrainttemplate-require-nonroot.yaml
+  - constrainttemplate-require-resource-limits.yaml
+  - constrainttemplate-disallow-latest-tag.yaml
+  - constrainttemplate-require-readonly-fs.yaml
+  - constrainttemplate-disallow-privileged.yaml
+  - constrainttemplate-require-labels.yaml
+
+# Add sync wave annotations
+patches:
+  # Wave 0: ConstraintTemplates
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "0"
+    target:
+      kind: ConstraintTemplate
+
+# Common labels
+labels:
+  - pairs:
+      app: opa-constrainttemplates
+      managed-by: kustomize
+
