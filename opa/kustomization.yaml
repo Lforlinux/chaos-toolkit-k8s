@@ -6,11 +6,102 @@ kind: Kustomization
 # Delete: kubectl delete -k opa/  (deletes everything including namespace)
 
 resources:
-  # 1. Install Gatekeeper first (includes namespace, CRDs, deployments, etc.)
+  # Wave -1: Install Gatekeeper first (includes namespace, CRDs, deployments, etc.)
   - gatekeeper.yaml
   
-  # 2. Then deploy all policy manifests (ConstraintTemplates and Constraints)
+  # Wave 0: Then deploy ConstraintTemplates (policy definitions)
+  # Wave 1: Finally deploy Constraints (policy enforcement)
   - k8s-policy-manifest/
+
+# Add sync wave annotations to ensure proper ordering in ArgoCD
+# This ensures Gatekeeper CRDs are created before ConstraintTemplates
+# and ConstraintTemplates are created before Constraints
+patches:
+  # Wave -1: All Gatekeeper resources (CRDs, Deployments, etc.)
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: CustomResourceDefinition
+      name: ".*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Deployment
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Service
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ServiceAccount
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ClusterRole
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ClusterRoleBinding
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Role
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: RoleBinding
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ConfigMap
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Secret
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Namespace
+      name: "gatekeeper-system"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ResourceQuota
+      name: ".*gatekeeper.*"
 
 # Common labels for all resources
 labels:
@@ -18,10 +109,10 @@ labels:
       app: opa-policies
       managed-by: kustomize
 
-# Note: Resources are applied in order:
-# 1. Gatekeeper (namespace, CRDs, controller)
-# 2. ConstraintTemplates (policy definitions)
-# 3. Constraints (policy enforcement)
+# Note: Sync waves ensure proper ordering in ArgoCD:
+# Wave -1: Gatekeeper (CRDs, controller, RBAC) - Installs first
+# Wave 0: ConstraintTemplates (policy definitions) - After Gatekeeper CRDs are ready
+# Wave 1: Constraints (policy enforcement) - After ConstraintTemplate CRDs are ready
 #
-# If constraints fail on first apply, wait a few seconds for CRDs to be ready and apply again:
-#   sleep 10 && kubectl apply -k opa/
+# This prevents "unknown kind" errors when ArgoCD tries to apply resources
+# before their CRDs exist.

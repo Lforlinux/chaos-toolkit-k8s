@@ -20,6 +20,7 @@ spec:
   syncPolicy:
     syncOptions:
       - CreateNamespace=true
+      - PruneLast=true  # Prune resources last (after all resources are synced)
     automated:
       prune: true
       selfHeal: true

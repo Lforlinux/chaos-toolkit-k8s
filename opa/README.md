@@ -37,7 +37,12 @@ kubectl delete -k opa/
 - All ConstraintTemplates (policy definitions)
 - All Constraints (policy enforcement)
 
-Resources are applied in order automatically by Kustomize.
+**Sync Waves for ArgoCD**:
+- **Wave -1**: Gatekeeper resources (CRDs, controller) - Installs first
+- **Wave 0**: ConstraintTemplates (policy definitions) - After Gatekeeper CRDs are ready
+- **Wave 1**: Constraints (policy enforcement) - After ConstraintTemplate CRDs are ready
+
+This ensures proper ordering and prevents "unknown kind" errors in ArgoCD.
 
 ## Policies
 

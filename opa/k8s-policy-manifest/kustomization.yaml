@@ -28,6 +28,57 @@ resources:
 # Note: constraint-online-boutique-nonroot.yaml (enforce mode) is excluded
 # Use switch-enforcement-mode.sh to change modes
 
+# Add sync wave annotations for ArgoCD ordering
+# ConstraintTemplates (wave 0) must come before Constraints (wave 1)
+# This ensures ConstraintTemplate CRDs are created before Constraints try to use them
+patches:
+  # Wave 0: ConstraintTemplates (policy definitions)
+  # These create CRDs that Constraints will use
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "0"
+    target:
+      kind: ConstraintTemplate
+  # Wave 1: Constraints (policy enforcement)
+  # These use the CRDs created by ConstraintTemplates
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "1"
+    target:
+      kind: K8sRequiredNonRoot
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "1"
+    target:
+      kind: K8sRequiredResources
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "1"
+    target:
+      kind: K8sDisallowLatestTag
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "1"
+    target:
+      kind: K8sRequiredReadonlyFS
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "1"
+    target:
+      kind: K8sDisallowPrivileged
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "1"
+    target:
+      kind: K8sRequiredLabels
+
 # Common labels for all resources
 labels:
   - pairs:
