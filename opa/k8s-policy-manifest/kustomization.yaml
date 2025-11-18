@@ -4,17 +4,19 @@ kind: Kustomization
 # Note: No default namespace set - ConstraintTemplates and Constraints are cluster-scoped resources
 # The namespace.yaml creates gatekeeper-system namespace explicitly
 
-# ConstraintTemplates (policy definitions)
-# NOTE: This kustomization is for manual kubectl apply only
-# For ArgoCD, use:
-# - constrainttemplates-only-kustomization.yaml (opa-constrainttemplates-app)
-# - constraints-only-kustomization.yaml (opa-constraints-app)
+# ConstraintTemplates and Constraints (policy definitions and enforcement)
+# Used by ArgoCD application: opa-policies
 
 resources:
   # Note: namespace.yaml is excluded - Gatekeeper creates gatekeeper-system namespace during installation
   # If you need to create it manually, use: kubectl create namespace gatekeeper-system
 
-  # Security Policies - ConstraintTemplates
+  # PreSync Hook: Wait for ConstraintTemplate CRDs before applying Constraints
+  # This runs in wave 0.5 (after ConstraintTemplates wave 0, before Constraints wave 1)
+  - pre-sync-wait-crds.yaml
+
+  # Security Policies - ConstraintTemplates (wave 0)
+  # These create CRDs that Constraints will use
   - constrainttemplate-require-nonroot.yaml
   - constrainttemplate-require-resource-limits.yaml
   - constrainttemplate-disallow-latest-tag.yaml
@@ -34,8 +36,9 @@ resources:
 # Use switch-enforcement-mode.sh to change modes
 
 # Add sync wave annotations for ArgoCD ordering
-# PreSync Hook (wave -1) waits for CRDs
-# ConstraintTemplates (wave 0) must come before Constraints (wave 1)
+# Wave 0: ConstraintTemplates (policy definitions) - Creates CRDs
+# Wave 0.5: PreSync Hook waits for ConstraintTemplate CRDs to be established
+# Wave 1: Constraints (policy enforcement) - Uses the CRDs
 # This ensures ConstraintTemplate CRDs are created before Constraints try to use them
 patches:
   # Wave 0: ConstraintTemplates (policy definitions)

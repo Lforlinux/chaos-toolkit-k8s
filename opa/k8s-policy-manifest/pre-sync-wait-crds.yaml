@@ -6,7 +6,7 @@ metadata:
   annotations:
     argocd.argoproj.io/hook: PreSync
     argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
-    argocd.argoproj.io/sync-wave: "-1"  # Runs before Constraints (wave 1) are synced
+    argocd.argoproj.io/sync-wave: "0.5"  # Runs after ConstraintTemplates (wave 0), before Constraints (wave 1)
 spec:
   template:
     spec:
