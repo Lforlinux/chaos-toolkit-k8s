@@ -1,0 +1,103 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Kustomization for Gatekeeper only (used by opa-gatekeeper-app.yaml)
+# Policies are deployed separately via opa-policies-app.yaml
+
+resources:
+  # Only include Gatekeeper (CRDs, controller, RBAC)
+  - gatekeeper.yaml
+
+# Add sync wave annotations to ensure proper ordering
+patches:
+  # Wave -1: All Gatekeeper resources (CRDs, Deployments, etc.)
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: CustomResourceDefinition
+      name: ".*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Deployment
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Service
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ServiceAccount
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ClusterRole
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ClusterRoleBinding
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Role
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: RoleBinding
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ConfigMap
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Secret
+      name: ".*gatekeeper.*"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: Namespace
+      name: "gatekeeper-system"
+  - patch: |-
+      - op: add
+        path: /metadata/annotations/argocd.argoproj.io~1sync-wave
+        value: "-1"
+    target:
+      kind: ResourceQuota
+      name: ".*gatekeeper.*"
+
+# Common labels
+labels:
+  - pairs:
+      app: opa-gatekeeper
+      managed-by: kustomize
